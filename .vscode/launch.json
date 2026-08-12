@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DRAIS Server (Dart)",
+      "type": "dart",
+      "request": "launch",
+      "program": "server/bin/server.dart",
+      "cwd": "${workspaceFolder}/server",
+      "console": "debugConsole"
+    },
+    {
+      "name": "DRAIS Mobile — Linux",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "linux",
+      "args": ["--dart-define-from-file=env/development.json"]
+    },
+    {
+      "name": "DRAIS Mobile — Android",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "android",
+      "args": ["--dart-define-from-file=env/development.json"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "DRAIS — server + app",
+      "configurations": ["DRAIS Server (Dart)", "DRAIS Mobile — Linux"],
+      "stopAll": true
+    }
+  ]
+}

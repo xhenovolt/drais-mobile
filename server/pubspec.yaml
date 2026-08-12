@@ -1,0 +1,34 @@
+name: drais_server
+description: "DRAIS Server — the Dart implementation of the DRAIS API."
+publish_to: 'none'
+
+# Tracks the mobile client's version line while the two ship together.
+# See ../docs/VERSIONING.md.
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  # HTTP server. shelf over dart_frog deliberately: dart_frog needs its own CLI
+  # and generates route code at build time, and this project has a standing
+  # position against build steps (see ../docs/adr/M0005). shelf is plain Dart,
+  # mature (1.4.x), and the router is explicit.
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+
+  # MySQL wire protocol — TiDB Cloud is protocol-compatible.
+  # NOTE: 0.0.x. This is the least mature link in the stack and is called out
+  # in ../docs/PARITY.md; Node's mysql2 has years more production exposure.
+  mysql_client: ^0.0.27
+
+  # bcrypt, pure Dart. Must verify hashes produced by Node's bcryptjs
+  # ($2a$/$2b$), since existing users' passwords were hashed there.
+  dbcrypt: ^2.0.0
+
+  # Server configuration from the environment / .env file.
+  dotenv: ^4.2.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0

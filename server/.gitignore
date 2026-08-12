@@ -1,0 +1,9 @@
+# Live credentials never travel — this repository is public. `.env.example` is
+# committed instead, and is what a fresh clone copies from.
+.env
+!.env.example
+.dart_tool/
+build/
+
+# NOTE: pubspec.lock IS committed. Pinning the server's dependency versions is
+# part of what makes a fresh clone build the same thing this one does.

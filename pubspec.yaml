@@ -1,0 +1,63 @@
+name: drais
+description: "DRAIS Mobile — the Flutter presentation layer of the DRAIS platform."
+publish_to: 'none'
+
+# Mobile starts its own semver line at 1.0.0 (see docs/VERSIONING.md).
+# It is NOT pinned to the LongTerm web version (currently 1.173.x); the two
+# advance independently but follow the same MAJOR/MINOR/PATCH rules.
+version: 1.7.2+10
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management + DI. See docs/adr/M0001-riverpod-as-state-and-di.md
+  flutter_riverpod: ^2.6.1
+
+  # Navigation, deep links, auth/role guards. docs/adr/M0003-go-router-navigation.md
+  go_router: ^17.4.0
+
+  # HTTP transport with interceptors, multipart, cancellation.
+  dio: ^5.7.0
+
+  # Session cookie storage in the platform keystore/keychain.
+  # See docs/adr/M0002-cookie-session-parity.md
+  flutter_secure_storage: ^10.3.1
+
+  # Non-sensitive preferences + JSON response cache.
+  shared_preferences: ^2.3.4
+
+  # Offline detection, so we can distinguish "no network" from "server error".
+  connectivity_plus: ^7.3.1
+
+  # Annotations only (@visibleForTesting, @immutable). Already in the Flutter
+  # SDK's transitive graph; declared explicitly because we import it directly.
+  meta: ^1.16.0
+  mysql_client: ^0.0.27
+  dbcrypt: ^2.0.0
+  path_provider: ^2.1.6
+  flutter_svg: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Optional direct-mode database config. Present only in builds intended to
+    # talk to TiDB without a server — see docs/DEPLOYMENT_MODES.md. The file is
+    # gitignored; `flutter build` tolerates the directory being empty.
+    - assets/
+    - assets/illustrations/
+    # DRAIS brand marks, copied from the LongTerm web app so both surfaces
+    # carry the same logo rather than two lookalikes.
+    - assets/brand/
+    - assets/icons/
+    - assets/wallpapers/

@@ -1,0 +1,25 @@
+# DRAIS Server — static analysis.
+# Matches the mobile app's strictness; see ../analysis_options.yaml.
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    unawaited_futures: error
+
+linter:
+  rules:
+    # Disabled with reason, matching the mobile app's configuration:
+    # `this._field` would make the private name part of the public named-
+    # argument API, which is worse for callers than the assignment it saves.
+    prefer_initializing_formals: false
+    always_declare_return_types: true
+    avoid_slow_async_io: true
+    only_throw_errors: true
+    prefer_final_locals: true
+    prefer_single_quotes: true
+    require_trailing_commas: true
+    unnecessary_parenthesis: true
