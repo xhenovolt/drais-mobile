@@ -1,0 +1,169 @@
+# Flutter Android build workflow with artifact naming: [name]-<version>-<channel>.<ext>
+name: Flutter Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Build channel (release, debug, etc.)'
+        required: false
+        default: 'release'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      # allow overriding via workflow_dispatch input; fallback to 'release'
+      BUILD_CHANNEL: ${{ github.event.inputs.channel || 'release' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.yaml') }}
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Set up Java (required for Android builds)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter --version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Extract app name and version from pubspec.yaml
+        id: pkg
+        run: |
+          # Extract 'name' and 'version' from pubspec.yaml
+          APP_NAME=$(grep '^name:' pubspec.yaml | head -n1 | awk '{print $2}' || true)
+          APP_VERSION=$(grep '^version:' pubspec.yaml | head -n1 | awk '{print $2}' || true)
+          # Strip build number after + if present (e.g. 1.2.3+4 -> 1.2.3)
+          APP_VERSION=${APP_VERSION%%+*}
+          # Fallbacks if grep failed
+          if [ -z "$APP_NAME" ]; then
+            echo "Warning: could not find name in pubspec.yaml, using repo name"
+            APP_NAME="${{ github.repository }}"; APP_NAME=${APP_NAME##*/}
+          fi
+          if [ -z "$APP_VERSION" ]; then
+            echo "Warning: could not find version in pubspec.yaml, using 0.0.0"
+            APP_VERSION="0.0.0"
+          fi
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "BUILD_CHANNEL=$BUILD_CHANNEL" >> $GITHUB_ENV
+          echo "Extracted APP_NAME=$APP_NAME APP_VERSION=$APP_VERSION BUILD_CHANNEL=$BUILD_CHANNEL"
+
+      - name: Run tests
+        run: flutter test --no-pub
+
+      - name: Decode keystore (if provided)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          chmod 600 android/app/upload-keystore.jks
+
+      - name: Create key.properties (if signing secrets provided)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' && secrets.KEY_PASSWORD != '' }}
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=app/upload-keystore.jks
+          EOF
+          echo "Created android/key.properties."
+
+      - name: Accept Android licenses
+        run: yes | flutter doctor --android-licenses
+
+      - name: Prebuild (ensure platform folders exist)
+        run: flutter pub get || true
+
+      - name: Build APK / AAB
+        run: |
+          set -e
+          echo "Building for channel: $BUILD_CHANNEL"
+          APK_SRC=""
+          AAB_SRC=""
+          if [ "$BUILD_CHANNEL" = "release" ]; then
+            flutter build apk --release --no-shrink
+            flutter build appbundle --release --no-shrink
+            APK_SRC="build/app/outputs/flutter-apk/app-release.apk"
+            AAB_SRC="build/app/outputs/bundle/release/app-release.aab"
+          else
+            # default builds an APK for non-release channels
+            flutter build apk --$BUILD_CHANNEL || flutter build apk --debug
+            # choose apk file name based on debug/release
+            if [ -f build/app/outputs/flutter-apk/app-$BUILD_CHANNEL.apk ]; then
+              APK_SRC="build/app/outputs/flutter-apk/app-$BUILD_CHANNEL.apk"
+            elif [ -f build/app/outputs/flutter-apk/app-debug.apk ]; then
+              APK_SRC="build/app/outputs/flutter-apk/app-debug.apk"
+            fi
+          fi
+          echo "APK_SRC=$APK_SRC" >> $GITHUB_ENV
+          echo "AAB_SRC=$AAB_SRC" >> $GITHUB_ENV
+          ls -lah build/app/outputs || true
+
+      - name: Prepare artifact filenames
+        run: |
+          # Build artifact names: [name]-<version>-<channel>.<ext>
+          ART_APK_NAME="${APP_NAME}-${APP_VERSION}-${BUILD_CHANNEL}.apk"
+          echo "ART_APK_NAME=$ART_APK_NAME" >> $GITHUB_ENV
+          if [ -n "$AAB_SRC" ] && [ -f "$AAB_SRC" ]; then
+            ART_AAB_NAME="${APP_NAME}-${APP_VERSION}-${BUILD_CHANNEL}.aab"
+            echo "ART_AAB_NAME=$ART_AAB_NAME" >> $GITHUB_ENV
+          fi
+
+      - name: Copy and rename outputs for upload
+        run: |
+          mkdir -p build/artifacts
+          if [ -n "$APK_SRC" ] && [ -f "$APK_SRC" ]; then
+            cp "$APK_SRC" "build/artifacts/${ART_APK_NAME}"
+            echo "Copied APK to build/artifacts/${ART_APK_NAME}"
+          else
+            echo "No APK found at $APK_SRC"
+          fi
+          if [ -n "$AAB_SRC" ] && [ -f "$AAB_SRC" ]; then
+            cp "$AAB_SRC" "build/artifacts/${ART_AAB_NAME}"
+            echo "Copied AAB to build/artifacts/${ART_AAB_NAME}"
+          else
+            echo "No AAB to copy (AAB only produced for release builds)"
+          fi
+          ls -lah build/artifacts || true
+
+      - name: Upload APK artifact
+        if: always() && env.ART_APK_NAME != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flutter APK - ${{ env.APP_NAME }}-${{ env.APP_VERSION }}-${{ env.BUILD_CHANNEL }}
+          path: build/artifacts/${{ env.ART_APK_NAME }}
+
+      - name: Upload AAB artifact
+        if: always() && env.ART_AAB_NAME != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flutter AAB - ${{ env.APP_NAME }}-${{ env.APP_VERSION }}-${{ env.BUILD_CHANNEL }}
+          path: build/artifacts/${{ env.ART_AAB_NAME }}
