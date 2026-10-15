@@ -39,7 +39,8 @@ Direct mode is the primary path ([M0006](adr/M0006-direct-mode-ports-longterm.md
 | **Students: contacts, duplicates, bulk** | **Done 2026-10-15.** Contacts list/add/edit/remove and primary contact, duplicate detection and merge, promote a class, bulk enrol. See PARITY §4.2. |
 | Students (remaining) | Photos (blocked: Cloudinary needs a signing secret, which must not ship in an APK), ID cards, Excel imports. Permanent delete stays desk-only. Fingerprint and face enrolment need a device and stay desktop-side. |
 | Attendance (writes) | Deferred: every write needs the attendance engine (`evaluateDay`, about 2,500 lines with dependencies, changed upstream 2026-09-29). Port it as one deliberate project, or leave writes to the web. |
-| Then, in order | Notifications, Finance, Timetable, Discipline and Work Plans, Messaging |
+| **Notifications (inbox)** | **Done 2026-10-15.** All/Unread/Archived, unread badge on Home, mark read, mark all read, archive, deep links to learners and attendance. Push is still to come (needs a platform device-token endpoint). |
+| Then, in order | Finance (read-first), Timetable, Discipline and Work Plans, Messaging |
 
 API mode still throws `UnimplementedError` for attendance, students, setup and time health. It needs `server/` routes or hosted endpoints before it can serve these modules.
 

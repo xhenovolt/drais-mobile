@@ -543,6 +543,33 @@ abstract final class DraisModules {
       ],
     ),
 
+    // ── Notifications ─────────────────────────────────────────────────────
+    ModuleSection(
+      label: 'Notifications',
+      icon: Icons.notifications_outlined,
+      items: <ModuleItem>[
+        ModuleItem(
+          label: 'Inbox',
+          icon: Icons.inbox_outlined,
+          route: AppRoutes.notifications,
+          availability: ModuleAvailability.live,
+        ),
+        ModuleItem(
+          label: 'Push notifications',
+          icon: Icons.notifications_active_outlined,
+          availability: ModuleAvailability.planned,
+          phase: 3,
+          note: 'Needs a device-token endpoint on the platform.',
+        ),
+        ModuleItem(
+          label: 'Outbox & Policies',
+          icon: Icons.outbox_outlined,
+          availability: ModuleAvailability.webOnly,
+          note: 'SMS rule authoring and delivery monitoring.',
+        ),
+      ],
+    ),
+
     // ── Settings ──────────────────────────────────────────────────────────
     ModuleSection(
       label: 'Settings',

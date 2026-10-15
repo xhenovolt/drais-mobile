@@ -32,6 +32,8 @@ import 'package:drais/features/attendance/domain/entities/attendance_history.dar
 import 'package:drais/features/attendance/domain/entities/attendance_insights.dart';
 import 'package:drais/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:drais/features/setup/data/setup_direct_repository.dart';
+import 'package:drais/features/notifications/data/notifications_direct_repository.dart';
+import 'package:drais/features/notifications/domain/notifications.dart';
 import 'package:drais/features/students/data/student_admin_direct_repository.dart';
 import 'package:drais/features/students/data/students_direct_repository.dart';
 import 'package:drais/features/students/domain/repositories/student_admin_repository.dart';
@@ -462,6 +464,36 @@ final Provider<StudentAdminRepository> studentAdminRepositoryProvider =
         logger: ref.watch(loggerProvider),
       );
     });
+
+/// The signed-in user's in-app notifications. Direct mode only.
+final Provider<NotificationsRepository> notificationsRepositoryProvider =
+    Provider<NotificationsRepository>((Ref ref) {
+      final DraisDatabase? database = ref.watch(draisDatabaseProvider);
+      final AuthUser? user = ref.watch(currentUserProvider);
+      if (database == null) {
+        throw UnimplementedError(
+          'Notifications over the API are not implemented yet — run in direct '
+          'mode.',
+        );
+      }
+      if (user?.schoolId == null) {
+        throw StateError('Requires a signed-in user with a school.');
+      }
+      return NotificationsDirectRepository(
+        database: database,
+        schoolId: user!.schoolId!,
+        userId: user.id,
+      );
+    });
+
+/// Unread notifications, for the bell badge.
+final AutoDisposeFutureProvider<int> unreadNotificationsProvider =
+    FutureProvider.autoDispose<int>(
+      (Ref ref) async =>
+          (await ref.watch(notificationsRepositoryProvider).unreadCount())
+              .valueOrNull ??
+          0,
+    );
 
 /// Writes the minimum school configuration. Direct mode only.
 final Provider<SetupDirectRepository> setupRepositoryProvider =

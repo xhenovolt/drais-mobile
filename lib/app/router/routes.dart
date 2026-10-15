@@ -210,6 +210,9 @@ abstract final class AppRoutes {
     },
   ).toString();
 
+  /// The in-app inbox. Mirrors the web `/notifications`.
+  static const String notifications = '/notifications';
+
   /// The signed-in user's profile. Mirrors the web `/profile`.
   static const String profile = '/profile';
 

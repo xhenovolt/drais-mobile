@@ -64,6 +64,7 @@ class HomePage extends ConsumerWidget {
           ),
         ),
         actions: <Widget>[
+          const _NotificationBell(),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
@@ -130,6 +131,28 @@ class HomePage extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The inbox, with its unread count — `GET /api/notifications/unread-count`.
+class _NotificationBell extends ConsumerWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final int unread = ref.watch(unreadNotificationsProvider).valueOrNull ?? 0;
+    return IconButton(
+      tooltip: unread == 0 ? 'Notifications' : '$unread unread notifications',
+      icon: Badge(
+        isLabelVisible: unread > 0,
+        label: Text(unread > 99 ? '99+' : '$unread'),
+        child: const Icon(Icons.notifications_outlined),
+      ),
+      onPressed: () async {
+        await context.push(AppRoutes.notifications);
+        ref.invalidate(unreadNotificationsProvider);
+      },
     );
   }
 }

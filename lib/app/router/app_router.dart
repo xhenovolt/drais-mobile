@@ -20,6 +20,7 @@ import 'package:drais/features/attendance/presentation/pages/attendance_trends_p
 import 'package:drais/features/attendance/presentation/pages/person_attendance_page.dart';
 import 'package:drais/features/attendance/presentation/pages/unmatched_punches_page.dart';
 import 'package:drais/features/home/presentation/pages/home_page.dart';
+import 'package:drais/features/notifications/presentation/notifications_page.dart';
 import 'package:drais/features/profile/presentation/pages/profile_page.dart';
 import 'package:drais/features/students/application/students_providers.dart';
 import 'package:drais/features/students/presentation/pages/admit_student_page.dart';
@@ -327,6 +328,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
         name: AppRoutes.profileName,
         builder: (BuildContext context, GoRouterState state) =>
             const ProfilePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (BuildContext context, GoRouterState state) =>
+            const NotificationsPage(),
       ),
       GoRoute(
         path: AppRoutes.appearance,

@@ -255,6 +255,19 @@ Permission checks (`requirePermission`) run in direct mode against the session's
 - Audit rows carry `source = 'MOBILE'` instead of the default `WEB`.
 - Duplicate detection fetches all groups' members in two statements, keyed by the SQL-computed name, instead of one query per group (up to 200 round trips on a phone).
 
+### 4.2a Notifications (in-app inbox)
+
+| Mobile (`NotificationsDirectRepository`) | LongTerm source |
+|---|---|
+| `list` | `GET /api/notifications/list` → `NotificationService.list` (filters all/unread/archived, cursor on `created_at`, `limit + 1` for `hasMore`) |
+| `unreadCount` | `GET /api/notifications/unread-count` (0 on error, as the service does) |
+| `markRead` / `archive` | `POST /api/notifications/mark-read` / `archive` |
+
+- **Not reproduced:** the socket `notification:updated` event (no listener on a phone), and push delivery, which needs FCM/APNs plus a device-token endpoint the platform doesn't have.
+- **Deliberate difference:** a row with unparseable `metadata` JSON is shown with empty metadata. The service throws, which on the web blanks the whole list.
+- **LongTerm quirk reproduced:** paging is strictly older than the cursor's `created_at`, so notifications sharing that exact timestamp are skipped.
+- **LongTerm quirk, visible here:** `POST /api/enrollments` inserts into `notifications` without any `user_notifications` rows. The inbox joins on `user_notifications`, so those enrolment notifications never appear for anyone, on either surface.
+
 ### 4.3 Shared direct-mode infrastructure
 
 - **`DraisDatabase.transaction`** exists because `mysql_client` 0.0.27's `pool.transactional()` never releases its connection when the transaction throws: `withConnection` has no `try/finally`. With a two-connection pool, two failed writes would lock the app out of the database. Never call `pool.transactional` directly.
