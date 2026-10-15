@@ -119,6 +119,46 @@ abstract final class AppRoutes {
   /// Builds a path to one learner.
   static String studentDetailPath(int id) => '/students/$id';
 
+  /// The learner list on its Admitted tab — where enrolment starts.
+  static const String studentsAdmitted = '/students?tab=admitted';
+
+  /// Admit a learner. Mirrors the web `/students/admit`.
+  static const String admitStudent = '/students/admit';
+
+  /// Route name for [admitStudent].
+  static const String admitStudentName = 'admitStudent';
+
+  /// Route name for the enrol form. Mirrors the web
+  /// `/students/enroll?student_id=`.
+  static const String enrollStudentName = 'enrollStudent';
+
+  /// Builds a path to the enrol form for one learner.
+  static String enrollStudentPath(int id) => '/students/$id/enroll';
+
+  /// Edit personal details — the web list page's edit form.
+  static String editStudentPath(int id) => '/students/$id/edit';
+
+  /// Edit family and background — `PUT /api/students/[id]/profile`.
+  static String editStudentProfilePath(int id) => '/students/$id/profile';
+
+  /// Edit next of kin.
+  static String nextOfKinPath(int id) => '/students/$id/next-of-kin';
+
+  /// Archived learners. Mirrors the web `/students/trash`.
+  static const String studentTrash = '/students/trash';
+
+  /// Every learner's contacts. Mirrors the web `/students/contacts`.
+  static const String studentContacts = '/students/contacts';
+
+  /// Possible duplicates. Mirrors the web `/students/duplicates`.
+  static const String studentDuplicates = '/students/duplicates';
+
+  /// Promote a whole class — the web enrol page's bulk promote.
+  static const String promoteClass = '/students/promote';
+
+  /// Enrol many learners at once. Mirrors the web `/students/enroll-bulk`.
+  static const String bulkEnroll = '/students/enroll-bulk';
+
   /// Appearance settings — accent, corners, density, wallpaper.
   static const String appearance = '/appearance';
 
@@ -148,6 +188,27 @@ abstract final class AppRoutes {
 
   /// Route name for [unmatchedPunches].
   static const String unmatchedPunchesName = 'unmatchedPunches';
+
+  /// One person's attendance — profile, day series and punches. Mirrors the
+  /// web `/attendance/profiles` drill-down.
+  static const String attendancePerson = '/attendance/person/:personId';
+
+  /// Route name for [attendancePerson].
+  static const String attendancePersonName = 'attendancePerson';
+
+  /// Builds a path to one person's attendance. [role] is `student` or
+  /// `staff`; [name] is shown while the data loads.
+  static String attendancePersonPath(
+    int personId, {
+    required String role,
+    String? name,
+  }) => Uri(
+    path: '/attendance/person/$personId',
+    queryParameters: <String, String>{
+      'role': role,
+      if (name != null && name.isNotEmpty) 'name': name,
+    },
+  ).toString();
 
   /// The signed-in user's profile. Mirrors the web `/profile`.
   static const String profile = '/profile';

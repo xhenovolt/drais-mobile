@@ -123,13 +123,12 @@ abstract final class DraisModules {
           icon: Icons.list_alt_outlined,
           route: AppRoutes.students,
           availability: ModuleAvailability.live,
-          permission: 'students.view',
         ),
         ModuleItem(
           label: 'Admit Student',
           icon: Icons.person_add_outlined,
-          availability: ModuleAvailability.webOnly,
-          note: 'A long validated form, done once per learner at a desk.',
+          route: AppRoutes.admitStudent,
+          availability: ModuleAvailability.live,
         ),
         ModuleItem(
           label: 'Admissions Pipeline',
@@ -140,8 +139,16 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Enroll Student',
           icon: Icons.school_outlined,
-          availability: ModuleAvailability.planned,
-          phase: 2,
+          // Enrolment is per learner, so it starts from the learners not yet
+          // enrolled this term — the web page's first step is the same pick.
+          route: AppRoutes.studentsAdmitted,
+          availability: ModuleAvailability.live,
+        ),
+        ModuleItem(
+          label: 'Bulk Enroll',
+          icon: Icons.playlist_add_check_outlined,
+          route: AppRoutes.bulkEnroll,
+          availability: ModuleAvailability.live,
         ),
         ModuleItem(
           label: 'Requirements',
@@ -152,8 +159,8 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Contacts',
           icon: Icons.phone_outlined,
-          availability: ModuleAvailability.planned,
-          phase: 1,
+          route: AppRoutes.studentContacts,
+          availability: ModuleAvailability.live,
         ),
         ModuleItem(
           label: 'Documents',
@@ -164,8 +171,8 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Duplicates',
           icon: Icons.warning_amber_outlined,
-          availability: ModuleAvailability.webOnly,
-          note: 'Side-by-side comparison of many records.',
+          route: AppRoutes.studentDuplicates,
+          availability: ModuleAvailability.live,
         ),
         ModuleItem(
           label: 'History',
@@ -178,6 +185,12 @@ abstract final class DraisModules {
           icon: Icons.badge_outlined,
           availability: ModuleAvailability.webOnly,
           note: 'Layout and printing.',
+        ),
+        ModuleItem(
+          label: 'Archived (Trash)',
+          icon: Icons.delete_sweep_outlined,
+          route: AppRoutes.studentTrash,
+          availability: ModuleAvailability.live,
         ),
       ],
     ),
@@ -199,7 +212,6 @@ abstract final class DraisModules {
           icon: Icons.receipt_long_outlined,
           route: AppRoutes.attendanceLog,
           availability: ModuleAvailability.live,
-          permission: 'attendance.view',
         ),
         ModuleItem(
           label: 'Time Health',
@@ -236,6 +248,14 @@ abstract final class DraisModules {
           icon: Icons.show_chart_outlined,
           route: AppRoutes.attendanceTrends,
           availability: ModuleAvailability.live,
+        ),
+        ModuleItem(
+          label: 'Attendance Profiles',
+          icon: Icons.person_pin_outlined,
+          // One person's profile is live (tap anyone in the logs); the
+          // school-wide watch-list page is not yet.
+          availability: ModuleAvailability.planned,
+          phase: 3,
         ),
         ModuleItem(
           label: 'Event Explorer',
@@ -278,8 +298,8 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Device Logs',
           icon: Icons.article_outlined,
-          route: AppRoutes.attendanceLog,
-          availability: ModuleAvailability.live,
+          availability: ModuleAvailability.planned,
+          phase: 3,
         ),
       ],
     ),
@@ -384,14 +404,14 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Academic Years',
           icon: Icons.calendar_today_outlined,
-          route: AppRoutes.schoolSetup,
-          availability: ModuleAvailability.live,
+          availability: ModuleAvailability.planned,
+          phase: 2,
         ),
         ModuleItem(
           label: 'Terms',
           icon: Icons.event_note_outlined,
-          route: AppRoutes.schoolSetup,
-          availability: ModuleAvailability.live,
+          availability: ModuleAvailability.planned,
+          phase: 2,
         ),
         ModuleItem(
           label: 'Results',
@@ -408,8 +428,8 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Promotions',
           icon: Icons.trending_up_outlined,
-          availability: ModuleAvailability.webOnly,
-          note: 'Bulk operation across a whole cohort.',
+          route: AppRoutes.promoteClass,
+          availability: ModuleAvailability.live,
         ),
       ],
     ),

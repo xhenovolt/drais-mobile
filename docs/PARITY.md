@@ -50,6 +50,7 @@ Each of these is a presentation-layer decision — the layer the brief exempts f
 | Serialisation | TypeScript interfaces | Hand-written Dart parsers | [M0005](adr/M0005-hand-written-serialization.md) |
 | Version number | 1.173.x | 1.7.0 | Mobile's own number line ([VERSIONING](VERSIONING.md)) |
 | Health check 9 (`db`) | `SELECT 1` round-trip from a Vercel function | Same probe, from the handset | Direct mode has no server in between. On a phone this is the more honest number — a school on a bad connection genuinely does have a slow database. Same ladder (250 ms / 1000 ms), different distance. |
+| Business logic | Server only | **Direct mode:** ported to Dart in `data/direct/`, one LongTerm source per port ([M0006](adr/M0006-direct-mode-ports-longterm.md), §4). API mode: server only | With no server, the logic runs on the device or not at all |
 
 ### Mobile-only logic — no LongTerm counterpart
 
@@ -149,6 +150,121 @@ Handled centrally in `query()` ([ADR-0010](platform/0010-dual-database-mode.md))
 **Mobile impact:** none while it holds. Recorded because the regression signature is distinctive and easy to misattribute: **only paginated endpoints fail, and only in production.** A mobile engineer seeing that should look here before debugging the client.
 
 ---
+
+---
+
+## 4. Direct-mode ports of LongTerm logic
+
+In direct mode the app runs LongTerm's route logic itself ([M0006](adr/M0006-direct-mode-ports-longterm.md)). This section lists what has been ported, from where, and anything **not** reproduced.
+
+**Audit note (2026-09-29):** these ports were made against LongTerm **2.23.0** (`src/data/changelog.json`). §1–§3 above were audited against 1.173.x and have not been re-audited since the MAJOR bump.
+
+### 4.1 Attendance
+
+| Mobile | LongTerm source |
+|---|---|
+| `AttendanceDirectRepository.history` | `src/app/api/attendance/history/route.ts`: every filter (tab, date and time window, device, matched, search, class, stream, residence, gender, person, derived status), whitelisted sorting, `tab_counts`, pagination (1–250) |
+| `longterm/confidence_scoring.dart` | `src/lib/attendance/confidence-scoring.ts`: exact; tests transcribed |
+| `longterm/person_intelligence.dart` | `src/lib/attendance/person-intelligence.ts`: exact; tests transcribed |
+| `longterm/gender_filter.dart` | `src/lib/attendance/gender.ts` |
+| `longterm/school_time.dart` | `AttendanceFormatter.toUtcBoundary`, the history route's `timeBoundary`, and `utcBoundary`/`addMinutesToTime` from `dashboard-counts.ts`, `weekdayOf` from `day-overrides.ts` |
+| `dashboardCounts` | `src/lib/attendance/dashboard-counts.ts` incl. `resolveTimePolicy` (timezone and offset only) and `applyWeekdayOverride` |
+| `personProfile` | `src/app/api/attendance/person-profiles/route.ts` (single-person form) |
+| `classes` | `src/app/api/classes/route.ts` (id and name only) |
+
+**Not reproduced, deliberately:**
+
+- **`autoCorrectDay()` in the history route.** It rewrites `punch_at` for drifting devices *during a GET*. It's a write that belongs to the time-intelligence subsystem, and porting it piecemeal risks two engines correcting the same day differently. Consequence: until someone opens the web logs page, mobile shows the stored, uncorrected times.
+- **The Sentinel anomaly hook and the export audit** in the same route. Both are side effects with no visible output.
+- **`AttendancePresentationModel`.** It's display formatting; mobile formats with `schoolWallTime()` at the school's offset instead.
+
+**Reproduced exactly, including quirks:**
+
+- The history route's `device_clock_health` and `attendance_records` joins use a **hard-coded `+180` minutes**, not the school's offset.
+- With a time window and no date, "today" is `schoolLocalToday()` at the **default** offset.
+- `person-profiles` computes `since` from a **UTC** date.
+- `devices` is joined on serial without a school scope.
+
+**One mechanical difference:** the history route issues `COUNT(where)` and the tab-count query separately. Mobile computes both in one statement, summing the tab clause under the base filters. The numbers are identical; it saves a round trip.
+
+**Not ported (legacy):** `/api/attendance/summary`, `/stats` and `/student/[id]` read `student_attendance`, a pre-engine table that LongTerm's own comments call empty in production. The dashboard numbers come from `dashboard-counts.ts` instead, as the web dashboard's do.
+
+### 4.2 Students (admission and enrolment)
+
+| Mobile (`StudentsDirectRepository`) | LongTerm source |
+|---|---|
+| `enrolled` | `GET /api/students/enrolled` (term-aware, current term via `getCurrentTerm()`) |
+| `admitted` | `GET /api/students/admitted` |
+| `profile` | `GET /api/students/[id]/profile` |
+| `previousEnrollment` | `GET /api/students/[id]/previous-enrollment` |
+| `enrollmentOptions` | `/api/terms/current` (`resolveTermContext`), `/api/classes`, `/api/streams`, `/api/study-modes`, `/api/curriculums`, `/api/programs` |
+| `admit` | `POST /api/students`, incl. `checkCapacity` and `enforcePlanLimit` |
+| `enroll` | `POST /api/enrollments`: validation, the transaction, the audit log, the in-app notification |
+| `application/enrollment_suggestions.dart` | the web enrol form's promote/continue/demote class suggestion |
+| `update` | `PUT /api/students/edit`: dynamic people UPDATE, audit of changed fields only |
+| `setStatus` | `POST /api/students/bulk/status` with one id: the route the web list page calls (`left` needs a reason; `left`/`graduated` stamp `left_at`) |
+| `setResidency` | `PATCH /api/students/[id]/residency` (`academics.residency.manage`) |
+| `archive` | `DELETE /api/students/delete` → `archiveEntity()` incl. the audit snapshot and `suspendEnrollmentsForRole()` |
+| `trash` | `GET /api/students/list?view=trash` |
+| `restore` | `POST /api/students/restore`, incl. the capacity charge |
+| `saveNextOfKin` | `POST /api/students/[id]/next-of-kin` (`learners.profile.update`) |
+| `saveProfileBlocks` | `PUT /api/students/[id]/profile` (`learners.profile.update`) |
+
+| `StudentAdminDirectRepository.contacts` | `GET /api/students/contacts` (paginated, max 200) |
+| `addContact` | `POST /api/students/contacts`, JSON quick-add incl. link-existing-by-phone/email. The Excel import is not ported. |
+| `updateContact` / `removeContact` | `PUT` / `DELETE /api/students/contacts/[id]`, **with a tenant check added** (see below) |
+| `setPrimaryContact` | `POST /api/students/[id]/primary-contact` |
+| `duplicates` | `GET /api/students/duplicates` |
+| `merge` | `POST /api/students/duplicates/merge` |
+| `promoteClass` | `POST /api/enrollments/bulk` `mode: promote` |
+| `enrollMany` | `POST /api/enrollments/bulk` `mode: multiple_students` |
+
+Permission checks (`requirePermission`) run in direct mode against the session's own grants (`AuthUser.can`), with the same wildcard and super-admin semantics. The routes above that LongTerm leaves ungated (edit, status, archive, restore) are ungated here too.
+
+**LongTerm bugs reproduced deliberately. Fix them upstream first, then here:**
+
+- **`POST /api/students` drops `other_name`, `gender` and `date_of_birth`.** The web admit form collects and sends them; the route never inserts them. The mobile form collects them too, and the port drops them the same way, so both surfaces create identical rows.
+- **The web admit form marks last name optional, but the route rejects an admission without one.** The mobile form marks it required, the same outcome stated up front; the route logic is unchanged.
+- **The route returns no admission number.** Both surfaces show `#<student_id>`.
+- **Restoring from Trash leaves fingerprints suspended.** Archiving suspends the learner's biometric enrolments (`person_archived`). The restore route the Trash page calls is a direct UPDATE and never calls `reactivateEnrollmentsForRole()`, so a restored learner is still not recognised by attendance devices. `restoreEntity()` in the same service does reactivate them. The fix is for `/api/students/restore` to call it.
+- **`PUT /api/students/[id]/profile` writes every column of each block it receives**, defaulting absent ones to NULL. The mobile form sends back district, nationality, orphan and living-status ids unchanged so they aren't erased. The web form must do the same.
+- **The profile save isn't one transaction**: three blocks, three statements. Reproduced.
+- **Merging duplicates orphans their real attendance.** Merge moves enrolments, results, fees, promotions and the legacy `student_attendance` table. It does not move `attendance_records`, `attendance_raw_events` or `biometric_enrollments`, which are keyed by `person_id`. The duplicate's fingerprint therefore keeps resolving to a learner now in Trash. The phone shows this warning before every merge.
+- **Merging never moves contacts.** The contacts statement has no `school_id`, so `withTenantTransaction`'s guard (`assertTenantSafe`) throws, and the "table may not exist" `try/catch` swallows it. The duplicate's contacts stay on the archived record.
+- **Duplicate detection's "attendance" count reads `student_attendance`**, the empty legacy table, so it is always 0.
+- **Contacts: the edit route writes every field it is given**, defaulting absent ones to `''` or `'alive'`. The phone's edit form sends back the stored address, name parts and alive status, so an edit can't blank them or revive a deceased contact.
+
+**One LongTerm bug deliberately NOT reproduced (security):**
+
+- **`PUT` and `DELETE /api/students/contacts/[id]` have no tenant check.** They look the contact up by id alone, so any signed-in school can edit or delete another school's contacts. The mobile port adds `AND school_id = ?`. The route needs the same fix; it is a cross-tenant write.
+
+**Not reproduced:**
+
+- Fee balances on the Enrolled tab (`getBalancesForStudents`) belong to Finance.
+- Arabic display names (`?lang=ar`); the app is English-only.
+- The post-admission admin notification (`NotificationMiddleware.notifyOnAction`) runs through the notification template engine, which belongs to the Notifications module.
+- The results summary and top subjects on the previous enrolment belong to Academics.
+- `enforcePlanLimit` reads the server variable `ENFORCE_PLAN_LIMITS`, which a phone doesn't have. It's treated as its documented default, **off**, and the per-school override `billing.enforce_limits` is still honoured.
+
+**Not ported, pending a decision:** learner photos. LongTerm uploads them to Cloudinary using the account's API secret. In direct mode that secret would have to ship in the APK, where anyone holding it could overwrite or delete every school's photos. Unsigned upload presets, or a small server-side signer, would remove the need.
+
+**Mechanical differences (same results):**
+
+- `getCurrentTerm()`'s three sequential lookups are one ordered statement.
+- The profile's independent queries and the enrolment route's six existence checks run in parallel; the first missing reference is still reported in the route's order.
+- Audit rows carry `source = 'MOBILE'` instead of the default `WEB`.
+- Duplicate detection fetches all groups' members in two statements, keyed by the SQL-computed name, instead of one query per group (up to 200 round trips on a phone).
+
+### 4.3 Shared direct-mode infrastructure
+
+- **`DraisDatabase.transaction`** exists because `mysql_client` 0.0.27's `pool.transactional()` never releases its connection when the transaction throws: `withConnection` has no `try/finally`. With a two-connection pool, two failed writes would lock the app out of the database. Never call `pool.transactional` directly.
+- **`core/database/audit_log.dart`** ports `logAudit()` from `src/lib/audit.ts`.
+- **`core/database/longterm/plan_limits.dart`** ports `checkCapacity()` and `enforcePlanLimit()`. Both fail open, as on the platform.
+
+### 4.4 Fixed on the way
+
+- **`punch_at` was shown in device time.** `mysql_client` returns `DATETIME` as a bare string, which `DateTime.tryParse` reads as local time. `SqlValue.asUtcInstant` now reads it as UTC, and screens render it as school time.
+- **The day window was `DATE(punch_at)`**, which files every 00:00–02:59 EAT punch under the previous day. The history and counts queries now use the platform's `[local midnight − offset, +24h)` window. `trend()` still reads `attendance_records.attendance_date` (already a school-local date) and is unaffected.
 
 ## Keeping this document true
 

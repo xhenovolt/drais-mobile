@@ -170,6 +170,15 @@ class DraisDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
     final AuthUser? user = ref.watch(currentUserProvider);
+    // Where the user is now, so the matching entry is highlighted.
+    final Uri here = GoRouter.of(context).routerDelegate.currentConfiguration.uri;
+    // Exactly one entry is highlighted, even where two share a route.
+    ModuleItem? current;
+    for (final ModuleSection s in DraisModules.sections) {
+      for (final ModuleItem i in s.items) {
+        if (current == null && _isCurrent(i, here)) current = i;
+      }
+    }
 
     return Drawer(
       child: SafeArea(
@@ -182,7 +191,7 @@ class DraisDrawer extends ConsumerWidget {
                 padding: EdgeInsets.zero,
                 children: <Widget>[
                   for (final ModuleSection section in DraisModules.sections)
-                    _Section(section: section, user: user),
+                    _Section(section: section, user: user, current: current),
 
                   const Divider(indent: 16, endIndent: 16),
 
@@ -271,10 +280,17 @@ class DraisDrawer extends ConsumerWidget {
 
 /// One expandable section of the catalogue.
 class _Section extends StatelessWidget {
-  const _Section({required this.section, required this.user});
+  const _Section({
+    required this.section,
+    required this.user,
+    required this.current,
+  });
 
   final ModuleSection section;
   final AuthUser? user;
+
+  /// The highlighted entry, if it lives anywhere in the drawer.
+  final ModuleItem? current;
 
   @override
   Widget build(BuildContext context) {
@@ -305,21 +321,44 @@ class _Section extends StatelessWidget {
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
-      initiallyExpanded: section.initiallyExpanded,
+      // Open the section holding the current screen, so the highlight is
+      // visible without hunting for it.
+      initiallyExpanded:
+          section.initiallyExpanded ||
+          visible.any((ModuleItem i) => identical(i, current)),
       shape: const Border(),
       collapsedShape: const Border(),
       childrenPadding: const EdgeInsets.only(bottom: 4),
       children: visible
-          .map((ModuleItem item) => _Item(item: item))
+          .map(
+            (ModuleItem item) =>
+                _Item(item: item, selected: identical(item, current)),
+          )
           .toList(growable: false),
     );
   }
 }
 
+/// Whether [item] is the screen at [here]. Query parameters count, so the
+/// Admitted tab and the plain list are told apart.
+bool _isCurrent(ModuleItem item, Uri here) {
+  final String? route = item.route;
+  if (route == null || !item.isEnabled) return false;
+  final Uri target = Uri.parse(route);
+  return target.path == here.path &&
+      target.queryParameters.entries.every(
+        (MapEntry<String, String> e) => here.queryParameters[e.key] == e.value,
+      ) &&
+      (target.queryParameters.isNotEmpty || here.queryParameters.isEmpty);
+}
+
 class _Item extends StatelessWidget {
-  const _Item({required this.item});
+  const _Item({required this.item, required this.selected});
 
   final ModuleItem item;
+
+  /// The screen currently showing.
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -332,11 +371,22 @@ class _Item extends StatelessWidget {
 
     return ListTile(
       dense: true,
+      selected: selected,
+      selectedTileColor: theme.colorScheme.primaryContainer.withValues(
+        alpha: 0.5,
+      ),
       contentPadding: const EdgeInsets.only(left: 32, right: 12),
-      leading: Icon(item.icon, size: 18, color: foreground),
+      leading: Icon(
+        item.icon,
+        size: 18,
+        color: selected ? theme.colorScheme.primary : foreground,
+      ),
       title: Text(
         item.label,
-        style: theme.textTheme.bodyMedium?.copyWith(color: foreground),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: selected ? theme.colorScheme.primary : foreground,
+          fontWeight: selected ? FontWeight.w600 : null,
+        ),
       ),
       subtitle:
           item.availability == ModuleAvailability.webOnly && item.note != null
@@ -351,7 +401,7 @@ class _Item extends StatelessWidget {
       onTap: enabled
           ? () {
               Navigator.of(context).pop();
-              context.go(item.route!);
+              if (!selected) context.go(item.route!);
             }
           : null,
     );

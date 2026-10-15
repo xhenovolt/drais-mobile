@@ -25,11 +25,17 @@ import 'package:drais/app/theme/appearance_controller.dart';
 import 'package:drais/core/config/app_config.dart';
 import 'package:drais/core/config/data_mode.dart';
 import 'package:drais/core/database/drais_database.dart';
+import 'package:drais/core/datetime/local_date.dart';
 import 'package:drais/features/attendance/application/attendance_log_controller.dart';
 import 'package:drais/features/attendance/data/direct/attendance_direct_repository.dart';
+import 'package:drais/features/attendance/domain/entities/attendance_history.dart';
+import 'package:drais/features/attendance/domain/entities/attendance_insights.dart';
 import 'package:drais/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:drais/features/setup/data/setup_direct_repository.dart';
+import 'package:drais/features/students/data/student_admin_direct_repository.dart';
 import 'package:drais/features/students/data/students_direct_repository.dart';
+import 'package:drais/features/students/domain/repositories/student_admin_repository.dart';
+import 'package:drais/features/students/domain/repositories/students_repository.dart';
 import 'package:drais/features/timehealth/data/time_health_direct_repository.dart';
 import 'package:drais/core/error/failure.dart';
 import 'package:drais/core/error/result.dart';
@@ -328,9 +334,88 @@ attendanceLogControllerProvider =
           AttendanceLogController(ref.watch(attendanceRepositoryProvider)),
     );
 
-/// Reads the learner roster. Direct mode only, like attendance.
-final Provider<StudentsDirectRepository> studentsRepositoryProvider =
-    Provider<StudentsDirectRepository>((Ref ref) {
+/// Today at a glance, for the home screen: the dashboard counts plus the
+/// latest punches.
+///
+/// Separate from [attendanceLogControllerProvider] on purpose — changing the
+/// logs tab's filters must not change what the home card says about today.
+final AutoDisposeFutureProvider<TodayAttendance> todayAttendanceProvider =
+    FutureProvider.autoDispose<TodayAttendance>((Ref ref) async {
+      final AttendanceRepository repo = ref.watch(attendanceRepositoryProvider);
+      final String today = toLocalDateStr();
+      final List<Object> results = await Future.wait(<Future<Object>>[
+        repo.dashboardCounts(date: today),
+        repo.history(
+          AttendanceHistoryQuery(dateFrom: today, dateTo: today, limit: 5),
+        ),
+      ]);
+      final Result<DashboardAttendanceCounts> counts =
+          results[0] as Result<DashboardAttendanceCounts>;
+      final Result<AttendanceHistoryPage> recent =
+          results[1] as Result<AttendanceHistoryPage>;
+      return TodayAttendance(
+        counts: counts.fold(
+          onOk: (DashboardAttendanceCounts c) => c,
+          onErr: (Failure failure) => throw failure,
+        ),
+        recent: recent.valueOrNull,
+      );
+    });
+
+/// The school's classes, for the class filter.
+final AutoDisposeFutureProvider<List<ClassOption>> attendanceClassesProvider =
+    FutureProvider.autoDispose<List<ClassOption>>((Ref ref) async {
+      final Result<List<ClassOption>> result = await ref
+          .watch(attendanceRepositoryProvider)
+          .classes();
+      return result.fold(
+        onOk: (List<ClassOption> list) => list,
+        onErr: (Failure failure) => throw failure,
+      );
+    });
+
+/// One person's verdict series and profile —
+/// `/api/attendance/person-profiles?person_id=`.
+final AutoDisposeFutureProviderFamily<
+  PersonAttendance,
+  ({int personId, String role, int days})
+>
+personAttendanceProvider = FutureProvider.autoDispose
+    .family<PersonAttendance, ({int personId, String role, int days})>((
+      Ref ref,
+      ({int personId, String role, int days}) key,
+    ) async {
+      final Result<PersonAttendance> result = await ref
+          .watch(attendanceRepositoryProvider)
+          .personProfile(
+            personId: key.personId,
+            role: key.role,
+            days: key.days,
+          );
+      return result.fold(
+        onOk: (PersonAttendance p) => p,
+        onErr: (Failure failure) => throw failure,
+      );
+    });
+
+/// One person's latest punches — `/api/attendance/history?person_id=`, the
+/// drill-down the platform's consolidated view points at.
+final AutoDisposeFutureProviderFamily<AttendanceHistoryPage, int>
+personPunchesProvider = FutureProvider.autoDispose
+    .family<AttendanceHistoryPage, int>((Ref ref, int personId) async {
+      final Result<AttendanceHistoryPage> result = await ref
+          .watch(attendanceRepositoryProvider)
+          .history(AttendanceHistoryQuery(personId: personId, limit: 50));
+      return result.fold(
+        onOk: (AttendanceHistoryPage p) => p,
+        onErr: (Failure failure) => throw failure,
+      );
+    });
+
+/// Learners — list, profile, admission, enrolment. Direct mode only, like
+/// attendance.
+final Provider<StudentsRepository> studentsRepositoryProvider =
+    Provider<StudentsRepository>((Ref ref) {
       final DraisDatabase? database = ref.watch(draisDatabaseProvider);
       final AuthUser? user = ref.watch(currentUserProvider);
 
@@ -345,7 +430,36 @@ final Provider<StudentsDirectRepository> studentsRepositoryProvider =
 
       return StudentsDirectRepository(
         database: database,
+        // Both from the validated session — never from a screen.
         schoolId: user!.schoolId!,
+        userId: user.id,
+        // requirePermission(), in direct mode: the session's own grants,
+        // with the same wildcard and super-admin semantics.
+        can: user.can,
+        logger: ref.watch(loggerProvider),
+      );
+    });
+
+/// Contacts, duplicates and bulk enrolment. Direct mode only.
+final Provider<StudentAdminRepository> studentAdminRepositoryProvider =
+    Provider<StudentAdminRepository>((Ref ref) {
+      final DraisDatabase? database = ref.watch(draisDatabaseProvider);
+      final AuthUser? user = ref.watch(currentUserProvider);
+
+      if (database == null) {
+        throw UnimplementedError(
+          'Student administration over the API is not implemented yet — run '
+          'in direct mode.',
+        );
+      }
+      if (user?.schoolId == null) {
+        throw StateError('Requires a signed-in user with a school.');
+      }
+      return StudentAdminDirectRepository(
+        database: database,
+        schoolId: user!.schoolId!,
+        userId: user.id,
+        logger: ref.watch(loggerProvider),
       );
     });
 

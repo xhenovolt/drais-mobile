@@ -17,9 +17,16 @@ import 'package:drais/features/auth/presentation/pages/splash_page.dart';
 import 'package:drais/app/shell/app_shell.dart';
 import 'package:drais/features/attendance/presentation/pages/attendance_log_page.dart';
 import 'package:drais/features/attendance/presentation/pages/attendance_trends_page.dart';
+import 'package:drais/features/attendance/presentation/pages/person_attendance_page.dart';
 import 'package:drais/features/attendance/presentation/pages/unmatched_punches_page.dart';
 import 'package:drais/features/home/presentation/pages/home_page.dart';
 import 'package:drais/features/profile/presentation/pages/profile_page.dart';
+import 'package:drais/features/students/application/students_providers.dart';
+import 'package:drais/features/students/presentation/pages/admit_student_page.dart';
+import 'package:drais/features/students/presentation/pages/student_admin_pages.dart';
+import 'package:drais/features/students/presentation/pages/student_edit_pages.dart';
+import 'package:drais/features/students/presentation/pages/student_trash_page.dart';
+import 'package:drais/features/students/presentation/pages/enroll_student_page.dart';
 import 'package:drais/features/students/presentation/pages/student_detail_page.dart';
 import 'package:drais/features/students/presentation/pages/students_page.dart';
 import 'package:drais/features/timehealth/presentation/pages/time_health_page.dart';
@@ -172,6 +179,23 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
                     builder: (BuildContext context, GoRouterState state) =>
                         const UnmatchedPunchesPage(),
                   ),
+                  GoRoute(
+                    path: 'person/:personId',
+                    name: AppRoutes.attendancePersonName,
+                    builder: (BuildContext context, GoRouterState state) {
+                      final int? id = int.tryParse(
+                        state.pathParameters['personId'] ?? '',
+                      );
+                      if (id == null) return const AttendanceLogPage();
+                      return PersonAttendancePage(
+                        personId: id,
+                        role: state.uri.queryParameters['role'] == 'staff'
+                            ? 'staff'
+                            : 'student',
+                        initialName: state.uri.queryParameters['name'],
+                      );
+                    },
+                  ),
                 ],
               ),
             ],
@@ -192,11 +216,47 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
                 path: AppRoutes.students,
                 name: AppRoutes.studentsName,
                 builder: (BuildContext context, GoRouterState state) =>
-                    const StudentsPage(),
+                    StudentsPage(
+                      initialTab: state.uri.queryParameters['tab'] == 'admitted'
+                          ? StudentsTab.admitted
+                          : StudentsTab.enrolled,
+                    ),
                 routes: <RouteBase>[
                   // Nested, so a learner opens *inside* the Students tab and
                   // the bottom bar stays put — leaving the shell to view a
                   // learner would feel like leaving the app.
+                  // Declared before ':id' so "admit" is never read as an id.
+                  GoRoute(
+                    path: 'admit',
+                    name: AppRoutes.admitStudentName,
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const AdmitStudentPage(),
+                  ),
+                  GoRoute(
+                    path: 'trash',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const StudentTrashPage(),
+                  ),
+                  GoRoute(
+                    path: 'contacts',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const ContactsPage(),
+                  ),
+                  GoRoute(
+                    path: 'duplicates',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const DuplicatesPage(),
+                  ),
+                  GoRoute(
+                    path: 'promote',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const PromoteClassPage(),
+                  ),
+                  GoRoute(
+                    path: 'enroll-bulk',
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const BulkEnrollPage(),
+                  ),
                   GoRoute(
                     path: ':id',
                     name: AppRoutes.studentDetailName,
@@ -209,6 +269,49 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
                       }
                       return StudentDetailPage(studentId: id);
                     },
+                    routes: <RouteBase>[
+                      GoRoute(
+                        path: 'edit',
+                        builder: (BuildContext context, GoRouterState state) {
+                          final int? id = int.tryParse(
+                            state.pathParameters['id'] ?? '',
+                          );
+                          if (id == null) return const StudentsPage();
+                          return EditStudentPage(studentId: id);
+                        },
+                      ),
+                      GoRoute(
+                        path: 'profile',
+                        builder: (BuildContext context, GoRouterState state) {
+                          final int? id = int.tryParse(
+                            state.pathParameters['id'] ?? '',
+                          );
+                          if (id == null) return const StudentsPage();
+                          return EditStudentProfilePage(studentId: id);
+                        },
+                      ),
+                      GoRoute(
+                        path: 'next-of-kin',
+                        builder: (BuildContext context, GoRouterState state) {
+                          final int? id = int.tryParse(
+                            state.pathParameters['id'] ?? '',
+                          );
+                          if (id == null) return const StudentsPage();
+                          return NextOfKinPage(studentId: id);
+                        },
+                      ),
+                      GoRoute(
+                        path: 'enroll',
+                        name: AppRoutes.enrollStudentName,
+                        builder: (BuildContext context, GoRouterState state) {
+                          final int? id = int.tryParse(
+                            state.pathParameters['id'] ?? '',
+                          );
+                          if (id == null) return const StudentsPage();
+                          return EnrollStudentPage(studentId: id);
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

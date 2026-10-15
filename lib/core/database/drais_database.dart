@@ -102,6 +102,72 @@ class DraisDatabase {
     }
   }
 
+  /// Runs an INSERT and returns the generated id, or null when none was
+  /// generated.
+  Future<int?> insert(
+    String sql, [
+    List<Object?> params = const <Object?>[],
+  ]) async {
+    _assertNoBoundLimit(sql);
+
+    try {
+      final IResultSet result = params.isEmpty
+          ? await _pool.execute(sql)
+          : await _pool.execute(_toNamed(sql), _bind(params));
+      final int id = result.lastInsertID.toInt();
+      return id == 0 ? null : id;
+    } on Object catch (e, s) {
+      throw _asFailure(e, s);
+    }
+  }
+
+  /// Runs [body] inside one database transaction on one connection.
+  ///
+  /// Commits when [body] returns and rolls back when it throws, rethrowing
+  /// what it threw: a [Failure] thrown deliberately (a validation refusal)
+  /// arrives unchanged, and a driver error arrives mapped like any other.
+  ///
+  /// ## Why not `MySQLConnectionPool.transactional`
+  ///
+  /// In `mysql_client` 0.0.27, `withConnection` releases the connection only
+  /// when the callback **succeeds** — there is no `try/finally`. A failed
+  /// transaction through `transactional()` therefore leaks its connection
+  /// for good, and with this pool's two connections, two failed admissions
+  /// would leave the app unable to reach the database until restarted. The
+  /// callback below never throws out of `withConnection`, so the connection
+  /// always goes back to the pool.
+  Future<T> transaction<T>(Future<T> Function(DbTransaction tx) body) async {
+    final ({T? value, Object? error, StackTrace? stack}) outcome;
+    try {
+      outcome = await _pool.withConnection((MySQLConnection conn) async {
+        try {
+          await conn.execute('START TRANSACTION');
+          final T value = await body(DbTransaction._(conn, this));
+          await conn.execute('COMMIT');
+          return (value: value, error: null, stack: null);
+        } on Object catch (e, s) {
+          try {
+            await conn.execute('ROLLBACK');
+          } on Object {
+            // The connection may be the thing that failed; the original
+            // error is the one worth reporting.
+          }
+          return (value: null, error: e, stack: s);
+        }
+      });
+    } on Object catch (e, s) {
+      // Could not obtain a connection at all.
+      throw _asFailure(e, s);
+    }
+
+    final Object? error = outcome.error;
+    if (error != null) {
+      if (error is Failure) throw error;
+      throw _asFailure(error, outcome.stack ?? StackTrace.current);
+    }
+    return outcome.value as T;
+  }
+
   /// Connectivity probe, used by the diagnostics screen.
   Future<({bool connected, int? latencyMs, String? error})> ping() async {
     final Stopwatch stopwatch = Stopwatch()..start();
@@ -230,6 +296,59 @@ class DraisDatabase {
   }
 }
 
+/// Statements inside a [DraisDatabase.transaction], on its one connection.
+class DbTransaction {
+  DbTransaction._(this._conn, this._db);
+
+  final MySQLConnection _conn;
+  final DraisDatabase _db;
+
+  Future<IResultSet> _run(String sql, List<Object?> params) {
+    DraisDatabase._assertNoBoundLimit(sql);
+    return params.isEmpty
+        ? _conn.execute(sql)
+        : _conn.execute(
+            DraisDatabase._toNamed(sql),
+            DraisDatabase._bind(params),
+          );
+  }
+
+  /// Runs a query and returns its rows.
+  Future<List<Row>> query(
+    String sql, [
+    List<Object?> params = const <Object?>[],
+  ]) async => (await _run(sql, params)).rows
+      .map((ResultSetRow row) => row.typedAssoc())
+      .toList(growable: false);
+
+  /// Runs a query expected to return at most one row.
+  Future<Row?> queryOne(
+    String sql, [
+    List<Object?> params = const <Object?>[],
+  ]) async {
+    final List<Row> rows = await query(sql, params);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  /// Runs a statement, returning the affected row count.
+  Future<int> execute(
+    String sql, [
+    List<Object?> params = const <Object?>[],
+  ]) async => (await _run(sql, params)).affectedRows.toInt();
+
+  /// Runs an INSERT and returns the generated id.
+  Future<int?> insert(
+    String sql, [
+    List<Object?> params = const <Object?>[],
+  ]) async {
+    final int id = (await _run(sql, params)).lastInsertID.toInt();
+    return id == 0 ? null : id;
+  }
+
+  /// The database this transaction belongs to.
+  DraisDatabase get database => _db;
+}
+
 /// Coercion helpers shared by the direct-mode data sources.
 ///
 /// The driver returns `BIGINT` as `int` or `String` depending on the path, and
@@ -262,6 +381,43 @@ abstract final class SqlValue {
   static DateTime? asDate(Object? value) {
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  /// Reads a `DATETIME` column that stores a **UTC instant**, such as
+  /// `attendance_raw_events.punch_at`.
+  ///
+  /// `mysql_client` returns `DATETIME` as a bare `YYYY-MM-DD HH:MM:SS` string,
+  /// which [DateTime.tryParse] reads as *device-local* time. For a UTC column
+  /// that shifts every punch by the device's offset — three hours early in EAT.
+  /// LongTerm is explicit that `punch_at` is "a real UTC instant", so it is
+  /// read as one here.
+  static DateTime? asUtcInstant(Object? value) {
+    if (value is DateTime) {
+      return value.isUtc
+          ? value
+          : DateTime.utc(
+              value.year,
+              value.month,
+              value.day,
+              value.hour,
+              value.minute,
+              value.second,
+              value.millisecond,
+            );
+    }
+    if (value is! String || value.trim().isEmpty) return null;
+    final String raw = value.trim();
+    if (raw.startsWith('0000-00-00')) return null;
+    final bool hasZone =
+        raw.endsWith('Z') || RegExp(r'[+-]\d\d:?\d\d$').hasMatch(raw);
+    return DateTime.tryParse(hasZone ? raw : '${raw.replaceFirst(' ', 'T')}Z');
+  }
+
+  /// Reads a `DECIMAL`/`FLOAT`, which the driver may deliver as a string.
+  static double? asDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value.trim());
     return null;
   }
 }

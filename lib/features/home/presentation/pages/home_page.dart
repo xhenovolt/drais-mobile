@@ -7,9 +7,9 @@ import 'package:drais/app/theme/app_colors.dart';
 import 'package:drais/core/datetime/local_date.dart';
 import 'package:drais/core/di/providers.dart';
 import 'package:drais/core/error/failure.dart';
-import 'package:drais/features/attendance/application/attendance_log_controller.dart';
-import 'package:drais/features/attendance/domain/entities/attendance_log_entry.dart';
-import 'package:drais/features/attendance/domain/repositories/attendance_repository.dart';
+import 'package:drais/features/attendance/domain/entities/attendance_history.dart';
+import 'package:drais/features/attendance/domain/entities/attendance_insights.dart';
+import 'package:drais/features/attendance/presentation/pages/attendance_log_page.dart';
 import 'package:drais/features/auth/application/auth_state.dart';
 import 'package:drais/features/auth/domain/entities/auth_user.dart';
 import 'package:drais/features/setup/data/setup_direct_repository.dart';
@@ -37,7 +37,9 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
     final AuthState auth = ref.watch(authControllerProvider);
-    final AttendanceLogState log = ref.watch(attendanceLogControllerProvider);
+    final AsyncValue<TodayAttendance> today = ref.watch(
+      todayAttendanceProvider,
+    );
     final AsyncValue<bool> connectivity = ref.watch(connectivityProvider);
     final AuthUser? user = auth.user;
 
@@ -53,7 +55,7 @@ class HomePage extends ConsumerWidget {
       appBar: DraisAppBar(
         title: user.school?.name ?? 'DRAIS',
         subtitle: describeLocalDate(toLocalDateStr()),
-        busy: log.isLoading && log.entries.isNotEmpty,
+        busy: today.isLoading && today.hasValue,
         leading: Builder(
           builder: (BuildContext context) => IconButton(
             icon: const Icon(Icons.menu),
@@ -65,15 +67,15 @@ class HomePage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
-            onPressed: () =>
-                ref.read(attendanceLogControllerProvider.notifier).load(),
+            onPressed: () => ref.invalidate(todayAttendanceProvider),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(authControllerProvider.notifier).refresh();
-          await ref.read(attendanceLogControllerProvider.notifier).load();
+          ref.invalidate(todayAttendanceProvider);
+          await ref.read(todayAttendanceProvider.future);
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -110,9 +112,9 @@ class HomePage extends ConsumerWidget {
             // rather than saying "setup incomplete" and leaving them to guess.
             const _SetupNudge(),
 
-            _TodayCard(state: log),
+            _TodayCard(today: today),
             const SizedBox(height: 12),
-            _RecentArrivals(state: log),
+            _RecentArrivals(today: today),
             const SizedBox(height: 12),
             _QuickActions(user: user),
 
@@ -203,29 +205,31 @@ class _SetupNudge extends ConsumerWidget {
   }
 }
 
-/// Today's headline numbers.
+/// Today's headline numbers — the dashboard's attendance block
+/// (`getDashboardAttendanceCounts()`), labelled by role as the web dashboard
+/// insists: never an unlabelled 0/0/0.
 class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.state});
+  const _TodayCard({required this.today});
 
-  final AttendanceLogState state;
+  final AsyncValue<TodayAttendance> today;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final bool isDark = theme.brightness == Brightness.dark;
-    final AttendanceDaySummary s = state.summary;
 
-    if (state.isLoading && state.entries.isEmpty) {
+    final TodayAttendance? data = today.valueOrNull;
+    if (data == null && today.isLoading) {
       return const Card(
         child: SizedBox(
-          height: 132,
+          height: 160,
           child: Center(child: CircularProgressIndicator()),
         ),
       );
     }
 
-    final Failure? failure = state.failure;
-    if (failure != null && state.entries.isEmpty) {
+    if (data == null) {
+      final Object? error = today.error;
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -234,7 +238,12 @@ class _TodayCard extends StatelessWidget {
               Icon(Icons.error_outline, color: theme.colorScheme.error),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(failure.message, style: theme.textTheme.bodySmall),
+                child: Text(
+                  error is Failure
+                      ? error.message
+                      : 'Today\'s attendance could not be loaded.',
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
             ],
           ),
@@ -242,126 +251,56 @@ class _TodayCard extends StatelessWidget {
       );
     }
 
+    final HistoryTabCounts? tabs = data.recent?.tabCounts;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                _Metric(
-                  label: 'Present',
-                  value: s.present,
-                  color: DraisColors.forAttendanceStatus(
-                    'present',
-                    isDark: isDark,
-                  ),
-                ),
-                _Metric(
-                  label: 'Late',
-                  value: s.late,
-                  color: DraisColors.forAttendanceStatus(
-                    'late',
-                    isDark: isDark,
-                  ),
-                ),
-                _Metric(
-                  label: 'Absent',
-                  value: s.absent,
-                  color: DraisColors.forAttendanceStatus(
-                    'absent',
-                    isDark: isDark,
-                  ),
-                ),
-              ],
+            AttendanceCountsRow(
+              title: 'Learners',
+              counts: data.counts.students,
+              large: true,
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: <Widget>[
-                Icon(
-                  Icons.sensors,
-                  size: 14,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '${s.punches} punch${s.punches == 1 ? '' : 'es'} recorded',
-                  style: theme.textTheme.bodySmall?.copyWith(
+            const Divider(height: 24),
+            AttendanceCountsRow(title: 'Staff', counts: data.counts.staff),
+            if (tabs != null) ...<Widget>[
+              const SizedBox(height: 14),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.sensors,
+                    size: 14,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${tabs.all} punch${tabs.all == 1 ? '' : 'es'} recorded',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              if (tabs.unmatched > 0) ...<Widget>[
+                const SizedBox(height: 8),
+                _Warning(
+                  icon: Icons.person_search_outlined,
+                  color: DraisColors.forAttendanceStatus(
+                    'half_day',
+                    isDark: isDark,
+                  ),
+                  text:
+                      '${tabs.unmatched} punch'
+                      '${tabs.unmatched == 1 ? '' : 'es'} not matched to a '
+                      'person.',
                 ),
               ],
-            ),
-
-            // The thing a head teacher must see before trusting the numbers
-            // above it — a drifting clock changes what "late" means.
-            if (state.hasClockConcerns) ...<Widget>[
-              const SizedBox(height: 10),
-              _Warning(
-                icon: Icons.schedule_outlined,
-                color: DraisColors.forAttendanceStatus('late', isDark: isDark),
-                text:
-                    'A device clock is out by more than a minute. '
-                    'Arrival times today may not be accurate.',
-              ),
-            ],
-            if (s.unmatchedPunches > 0) ...<Widget>[
-              const SizedBox(height: 8),
-              _Warning(
-                icon: Icons.person_search_outlined,
-                color: DraisColors.forAttendanceStatus(
-                  'half_day',
-                  isDark: isDark,
-                ),
-                text:
-                    '${s.unmatchedPunches} punch'
-                    '${s.unmatchedPunches == 1 ? '' : 'es'} not matched to a '
-                    'person.',
-              ),
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final int value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            '$value',
-            style: theme.textTheme.displaySmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -396,23 +335,18 @@ class _Warning extends StatelessWidget {
   }
 }
 
-/// The last few arrivals, as a taste of the full log.
+/// The latest punches, as a taste of the full log.
 class _RecentArrivals extends StatelessWidget {
-  const _RecentArrivals({required this.state});
+  const _RecentArrivals({required this.today});
 
-  final AttendanceLogState state;
-
-  /// Enough to show the day is alive, few enough that the card stays a
-  /// summary rather than becoming a second log screen.
-  static const int _maxRows = 4;
+  final AsyncValue<TodayAttendance> today;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-
-    final List<AttendanceLogEntry> recent = state.entries
-        .take(_maxRows)
-        .toList(growable: false);
+    final AttendanceHistoryPage? page = today.valueOrNull?.recent;
+    final List<AttendanceHistoryRow> recent =
+        page?.rows ?? const <AttendanceHistoryRow>[];
 
     return Card(
       child: Padding(
@@ -422,7 +356,7 @@ class _RecentArrivals extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Text('Recent arrivals', style: theme.textTheme.titleSmall),
+                Text('Latest punches', style: theme.textTheme.titleSmall),
                 const Spacer(),
                 TextButton(
                   onPressed: () => context.go(AppRoutes.attendanceLog),
@@ -434,7 +368,7 @@ class _RecentArrivals extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 8, 8, 12),
                 child: Text(
-                  state.isLoading ? 'Loading…' : 'Nothing recorded yet today.',
+                  today.isLoading ? 'Loading…' : 'Nothing recorded yet today.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -442,12 +376,17 @@ class _RecentArrivals extends StatelessWidget {
               )
             else
               ...recent.map(
-                (AttendanceLogEntry e) => Padding(
+                (AttendanceHistoryRow r) => Padding(
                   padding: const EdgeInsets.only(right: 8, bottom: 10),
                   child: Row(
                     children: <Widget>[
                       Text(
-                        formatClockTime(e.punchAt),
+                        formatClockTime(
+                          schoolWallTime(
+                            r.checkTime,
+                            offsetMinutes: page!.offsetMinutes,
+                          ),
+                        ),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           fontFeatures: const <FontFeature>[
@@ -458,17 +397,22 @@ class _RecentArrivals extends StatelessWidget {
                       const SizedBox(width: 14),
                       Expanded(
                         child: Text(
-                          e.personLabel,
+                          r.label,
                           style: theme.textTheme.bodyMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (e.needsAttention)
-                        Icon(
-                          Icons.error_outline,
-                          size: 16,
-                          color: theme.colorScheme.tertiary,
+                      if (r.derivedLabel != null)
+                        Text(
+                          r.derivedLabel!,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: DraisColors.forAttendanceStatus(
+                              r.derivedStatusKey,
+                              isDark:
+                                  theme.brightness == Brightness.dark,
+                            ),
+                          ),
                         ),
                     ],
                   ),

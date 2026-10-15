@@ -21,6 +21,12 @@ analyzer:
     - "**/*.g.dart"
     # Separate Dart package with its own analysis_options.yaml.
     - server/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   rules:

@@ -26,6 +26,23 @@ Every module follows the same steps, in this order:
 
 The sequence is chosen by *value on a phone*, not by backend size. Some DRAIS subsystems are large and belong on a desktop.
 
+## Direct mode: porting LongTerm, module by module
+
+Direct mode is the primary path ([M0006](adr/M0006-direct-mode-ports-longterm.md)): each module's LongTerm routes and libraries are ported into `features/<module>/data/direct/`, with pure libraries in `data/direct/longterm/` and their tests transcribed from LongTerm. Step 6 of the recipe above becomes "port the route handler", and PARITY §4 records what was ported and what was not.
+
+| Module | Status |
+|---|---|
+| **Attendance (reads)** | **Done 2026-09-29.** History with every web filter and tab counts, dashboard counts, per-person profile and punches, classes. See PARITY §4.1. |
+| Attendance (writes) | Next: the web logs page's clear/delete rows, identity correction, time correction (`/api/attendance/logs/*`, `identity-correction`, `time-health` POST). Also `autoCorrectDay()` and `/api/attendance/explain`. |
+| **Students: list, profile, admission, enrolment** | **Done 2026-09-29.** Enrolled and Admitted tabs, full profile, admit, single-learner enrol. See PARITY §4.2. |
+| **Students: edit and lifecycle** | **Done 2026-10-15.** Edit details, family and background, next of kin, status, day/boarding, archive to Trash, restore. See PARITY §4.2. |
+| **Students: contacts, duplicates, bulk** | **Done 2026-10-15.** Contacts list/add/edit/remove and primary contact, duplicate detection and merge, promote a class, bulk enrol. See PARITY §4.2. |
+| Students (remaining) | Photos (blocked: Cloudinary needs a signing secret, which must not ship in an APK), ID cards, Excel imports. Permanent delete stays desk-only. Fingerprint and face enrolment need a device and stay desktop-side. |
+| Attendance (writes) | Deferred: every write needs the attendance engine (`evaluateDay`, about 2,500 lines with dependencies, changed upstream 2026-09-29). Port it as one deliberate project, or leave writes to the web. |
+| Then, in order | Notifications, Finance, Timetable, Discipline and Work Plans, Messaging |
+
+API mode still throws `UnimplementedError` for attendance, students, setup and time health. It needs `server/` routes or hosted endpoints before it can serve these modules.
+
 ### 1. Attendance — highest value
 
 `/api/attendance/*` · `src/lib/attendance/` · [ADR-0001](platform/ADR_INDEX.md), [ADR-0002](platform/ADR_INDEX.md), [ADR-0003](platform/ADR_INDEX.md), [ADR-0004](platform/ADR_INDEX.md)

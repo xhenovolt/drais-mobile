@@ -103,7 +103,7 @@ Covered today: permission semantics, envelope parsing, error-code classification
 
 ## Related
 
-- [M0001](adr/M0001-riverpod-as-state-and-di.md) · [M0002](adr/M0002-cookie-session-parity.md) · [M0003](adr/M0003-go-router-navigation.md) · [M0004](adr/M0004-no-business-logic-in-the-client.md) · [M0005](adr/M0005-hand-written-serialization.md)
+- [M0001](adr/M0001-riverpod-as-state-and-di.md) · [M0002](adr/M0002-cookie-session-parity.md) · [M0003](adr/M0003-go-router-navigation.md) · [M0004](adr/M0004-no-business-logic-in-the-client.md) · [M0005](adr/M0005-hand-written-serialization.md) · [M0006](adr/M0006-direct-mode-ports-longterm.md): in direct mode the app ports LongTerm's logic, which amends M0004
 - [PARITY](PARITY.md) — what is shared, what differs, what is broken upstream
 - [ENVIRONMENTS](ENVIRONMENTS.md) · [OFFLINE_STRATEGY](OFFLINE_STRATEGY.md) · [ROADMAP](ROADMAP.md)
 - [`docs/platform/`](platform/README.md) — the inherited platform decisions

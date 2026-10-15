@@ -133,3 +133,15 @@ String formatClockTime(DateTime? at) {
   final String minute = at.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
 }
+
+/// The school's wall-clock reading of a UTC instant.
+///
+/// Returned as a UTC-flagged [DateTime] whose *components* are the school's
+/// wall time — the same "wall epoch" trick `AttendanceFormatter` and
+/// `device-clock.ts` use. Read it with [formatClockTime] or [toLocalDateStr];
+/// never convert it again. Keyed on the school's offset rather than the
+/// device's zone, so a phone carried abroad still shows school time.
+DateTime schoolWallTime(
+  DateTime instant, {
+  int offsetMinutes = defaultOffsetMinutes,
+}) => instant.toUtc().add(Duration(minutes: offsetMinutes));

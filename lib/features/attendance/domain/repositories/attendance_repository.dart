@@ -1,5 +1,6 @@
 import 'package:drais/core/error/result.dart';
-import 'package:drais/features/attendance/domain/entities/attendance_log_entry.dart';
+import 'package:drais/features/attendance/domain/entities/attendance_history.dart';
+import 'package:drais/features/attendance/domain/entities/attendance_insights.dart';
 
 /// Which people a query covers.
 enum AttendanceAudience {
@@ -24,128 +25,44 @@ enum AttendanceAudience {
   bool get isFiltered => this != AttendanceAudience.all;
 }
 
-/// A query against the attendance log.
-class AttendanceLogQuery {
-  /// Creates a log query.
-  const AttendanceLogQuery({
-    required this.date,
-    this.audience = AttendanceAudience.all,
-    this.search,
-    this.onlyNeedingAttention = false,
-    this.limit = 100,
-    this.offset = 0,
-  });
-
-  /// School-local date, `YYYY-MM-DD`.
-  ///
-  /// Always produced by `toLocalDateStr` or `schoolLocalToday`, never by
-  /// formatting a UTC instant — see `core/datetime/local_date.dart`.
-  final String date;
-
-  /// Which people to include.
-  final AttendanceAudience audience;
-
-  /// Free-text match against the display name.
-  final String? search;
-
-  /// Restrict to rows an operator should look at: unmatched identities,
-  /// suspect clocks, provisional verdicts.
-  final bool onlyNeedingAttention;
-
-  /// Page size.
-  final int limit;
-
-  /// Page offset.
-  final int offset;
-
-  /// The next page, preserving filters.
-  AttendanceLogQuery nextPage() => copyWith(offset: offset + limit);
-
-  /// Returns a copy with the given overrides.
-  AttendanceLogQuery copyWith({
-    String? date,
-    AttendanceAudience? audience,
-    String? search,
-    bool? onlyNeedingAttention,
-    int? limit,
-    int? offset,
-  }) => AttendanceLogQuery(
-    date: date ?? this.date,
-    audience: audience ?? this.audience,
-    search: search ?? this.search,
-    onlyNeedingAttention: onlyNeedingAttention ?? this.onlyNeedingAttention,
-    limit: limit ?? this.limit,
-    offset: offset ?? this.offset,
-  );
-}
-
-/// Counts for a day, as the engine derived them.
-class AttendanceDaySummary {
-  /// Creates a day summary.
-  const AttendanceDaySummary({
-    this.present = 0,
-    this.late = 0,
-    this.absent = 0,
-    this.halfDay = 0,
-    this.other = 0,
-    this.punches = 0,
-    this.unmatchedPunches = 0,
-  });
-
-  /// Marked present.
-  final int present;
-
-  /// Marked late.
-  final int late;
-
-  /// Marked absent.
-  final int absent;
-
-  /// Half days.
-  final int halfDay;
-
-  /// Weekend, holiday, early leave.
-  final int other;
-
-  /// Raw punches recorded, which is **not** the same as people — one person
-  /// punching in and out produces two.
-  final int punches;
-
-  /// Punches DRAIS could not attach to a person.
-  final int unmatchedPunches;
-
-  /// People with a verdict of any kind.
-  int get accountedFor => present + late + absent + halfDay + other;
-
-  /// People who actually turned up.
-  int get attended => present + late + halfDay;
-
-  /// Whether anything has been recorded at all.
-  bool get isEmpty => accountedFor == 0 && punches == 0;
-}
-
-/// Reads the attendance log and its daily summary.
+/// Reads attendance, as DRAIS LongTerm's read routes do.
+///
+/// Each method is one platform route, reproduced — filters, fallbacks and
+/// quirks included — so the phone and the web app show the same rows and the
+/// same numbers:
+///
+/// | Method | LongTerm source |
+/// |---|---|
+/// | [history] | `GET /api/attendance/history` |
+/// | [dashboardCounts] | `getDashboardAttendanceCounts()` (`/api/dashboard/overview`) |
+/// | [personProfile] | `GET /api/attendance/person-profiles?person_id=` |
+/// | [classes] | `GET /api/classes` (id + name only) |
 ///
 /// ## Read-only, deliberately
 ///
 /// There is no marking method here. In DRAIS a punch is written through
 /// `recordRawEvent`, and the day's verdict is *derived* by the rule evaluator
-/// — around 5,000 lines of pure decision logic plus five device-clock
-/// policies. A client writing `attendance_records` directly would be
-/// fabricating engine output.
-///
-/// Marking will be added as a separate, explicit capability once the
-/// provisional-record story is settled. Until then this interface can only
-/// tell you what happened, which is what the screen actually needs.
+/// at ingest. The rows read here are that engine's output.
 abstract interface class AttendanceRepository {
-  /// Returns log entries matching [query], newest first.
-  Future<Result<List<AttendanceLogEntry>>> logEntries(AttendanceLogQuery query);
+  /// One page of the punch history.
+  Future<Result<AttendanceHistoryPage>> history(AttendanceHistoryQuery query);
 
-  /// Returns the derived counts for a day.
-  Future<Result<AttendanceDaySummary>> daySummary({
-    required String date,
-    AttendanceAudience audience = AttendanceAudience.all,
+  /// Present / late / absent for learners and staff on a school-local [date]
+  /// (default: the school's today).
+  Future<Result<DashboardAttendanceCounts>> dashboardCounts({String? date});
+
+  /// One person's verdict series and behavioural profile.
+  ///
+  /// [role] is `student` or `staff`; [days] is clamped to 14–120, as the
+  /// route does.
+  Future<Result<PersonAttendance>> personProfile({
+    required int personId,
+    required String role,
+    int days = 30,
   });
+
+  /// The school's classes, for the class filter.
+  Future<Result<List<ClassOption>>> classes();
 
   /// Daily verdict counts over the last [days], newest first.
   Future<Result<List<AttendanceTrendDay>>> trend({
