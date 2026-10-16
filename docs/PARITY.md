@@ -268,10 +268,37 @@ Permission checks (`requirePermission`) run in direct mode against the session's
 - **LongTerm quirk reproduced:** paging is strictly older than the cursor's `created_at`, so notifications sharing that exact timestamp are skipped.
 - **LongTerm quirk, visible here:** `POST /api/enrollments` inserts into `notifications` without any `user_notifications` rows. The inbox joins on `user_notifications`, so those enrolment notifications never appear for anyone, on either surface.
 
+### 4.5 Finance (read-only)
+
+| Mobile (`FinanceDirectRepository`) | LongTerm source |
+|---|---|
+| `learnerFees` | `GET /api/finance/learners-fees` (`finance.view`) |
+| `studentLedger` | `GET /api/finance/student-ledger` → `getStudentLedger` + `getStudentBalance` (module + `finance.view`) |
+| `payments` | `GET /api/finance/payments` (`finance.view`) |
+| `receipt` | `GET /api/finance/receipts/[ref]` (module + `finance.payments.view`) |
+| `core/formatting/currency.dart` | `src/lib/currency.ts`, `formatCurrency()` output character for character |
+| `longterm/fee_status.dart` | the route's per-learner totals and four-way status |
+
+**Permissions, as they really are.** `src/lib/finance-permissions.ts` (a finance role table) is imported by nothing; it plays no part in access. Finance is gated by ordinary RBAC codes (`finance.view`, `finance.payments.view`, `finance.fees.manage`) and, on some routes only, the `finance` module switch. `learners-fees` and `payments` import `checkModule` but never call it, so the mobile port doesn't check the module for them either.
+
+**Not reproduced, deliberately:**
+
+- **Receipt balances.** The receipt's `balance_before`/`balance_after` compute "expected" by joining `student_fee_items.fee_structure_id`, which LongTerm's own comments in `learners-fees` record is **never populated**. Every receipt therefore shows a balance of minus the learner's total payments. The phone omits those two lines and points to the learner's fee screen. The route should read `student_fee_items.amount`, as `learners-fees` does.
+- **The receipt verify token** (`receiptToken`). It's only used by the printable QR verification page.
+
+**LongTerm problems reproduced, to know about:**
+
+- **Two "balances" disagree.** The ledger balance (`student_ledger`: debits − credits) feeds the student list and the learner's fee screen. The fee-item balance (`student_fee_items`: amount − paid − waived − discount) feeds the fees list. They are maintained by different writers and can differ for the same learner. The phone shows each where the web does.
+- **Payments list fan-out.** `GET /api/finance/payments` joins active enrolments, ledger credits, receipts and reconciliations directly, so a learner with two active enrolments sees each payment twice. This is the bug `learners-fees` already fixed with a derived table.
+- A learner with no `people` row shows as `null null` in the fees list, as on the web: the route's template literal prints `null`.
+
+**Mechanical difference (same results):** `learners-fees` fetches every learner and every fee-item row (16,000+ at a large school) and sums them in memory. The port takes the same sums in SQL and returns one row per learner. The class-structure fallback joins null-safe (`<=>`) to reproduce the route's grouping of class-less learners with class-less structures. SQL sums `DECIMAL` exactly where JavaScript adds floats; for whole-shilling amounts the results are identical.
+
 ### 4.3 Shared direct-mode infrastructure
 
 - **`DraisDatabase.transaction`** exists because `mysql_client` 0.0.27's `pool.transactional()` never releases its connection when the transaction throws: `withConnection` has no `try/finally`. With a two-connection pool, two failed writes would lock the app out of the database. Never call `pool.transactional` directly.
 - **`core/database/audit_log.dart`** ports `logAudit()` from `src/lib/audit.ts`.
+- **`core/database/longterm/modules.dart`** ports `checkModule()` / `isModuleEnabled()` (opt-out module switch).
 - **`core/database/longterm/plan_limits.dart`** ports `checkCapacity()` and `enforcePlanLimit()`. Both fail open, as on the platform.
 
 ### 4.4 Fixed on the way

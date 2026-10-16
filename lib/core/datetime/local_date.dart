@@ -134,6 +134,17 @@ String formatClockTime(DateTime? at) {
   return '$hour:$minute';
 }
 
+/// Parses a stored UTC `DATETIME` string (`YYYY-MM-DD HH:MM:SS`) as a UTC
+/// instant — what `CAST(col AS CHAR)` returns for columns written with UTC
+/// `NOW()`. Null for blanks, zero dates and anything unparseable.
+DateTime? parseUtcSqlDateTime(String? raw) {
+  if (raw == null) return null;
+  final String v = raw.trim();
+  if (v.isEmpty || v.startsWith('0000-00-00')) return null;
+  final bool zoned = v.endsWith('Z') || RegExp(r'[+-]\d\d:?\d\d$').hasMatch(v);
+  return DateTime.tryParse(zoned ? v : '${v.replaceFirst(' ', 'T')}Z');
+}
+
 /// The school's wall-clock reading of a UTC instant.
 ///
 /// Returned as a UTC-flagged [DateTime] whose *components* are the school's

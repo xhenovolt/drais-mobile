@@ -32,6 +32,8 @@ import 'package:drais/features/attendance/domain/entities/attendance_history.dar
 import 'package:drais/features/attendance/domain/entities/attendance_insights.dart';
 import 'package:drais/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:drais/features/setup/data/setup_direct_repository.dart';
+import 'package:drais/features/finance/data/finance_direct_repository.dart';
+import 'package:drais/features/finance/domain/finance.dart';
 import 'package:drais/features/notifications/data/notifications_direct_repository.dart';
 import 'package:drais/features/notifications/domain/notifications.dart';
 import 'package:drais/features/students/data/student_admin_direct_repository.dart';
@@ -494,6 +496,26 @@ final AutoDisposeFutureProvider<int> unreadNotificationsProvider =
               .valueOrNull ??
           0,
     );
+
+/// Finance, read-only. Direct mode only.
+final Provider<FinanceRepository> financeRepositoryProvider =
+    Provider<FinanceRepository>((Ref ref) {
+      final DraisDatabase? database = ref.watch(draisDatabaseProvider);
+      final AuthUser? user = ref.watch(currentUserProvider);
+      if (database == null) {
+        throw UnimplementedError(
+          'Finance over the API is not implemented yet — run in direct mode.',
+        );
+      }
+      if (user?.schoolId == null) {
+        throw StateError('Requires a signed-in user with a school.');
+      }
+      return FinanceDirectRepository(
+        database: database,
+        schoolId: user!.schoolId!,
+        can: user.can,
+      );
+    });
 
 /// Writes the minimum school configuration. Direct mode only.
 final Provider<SetupDirectRepository> setupRepositoryProvider =

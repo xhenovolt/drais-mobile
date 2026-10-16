@@ -210,6 +210,24 @@ abstract final class AppRoutes {
     },
   ).toString();
 
+  /// Learner fees. Mirrors the web `/finance/learners-fees`.
+  static const String fees = '/finance/fees';
+
+  /// Payments, read-only. Mirrors the web `/finance/payments`.
+  static const String payments = '/finance/payments';
+
+  /// One learner's fees and payments.
+  static String learnerFinancePath(int studentId, {String? name}) => Uri(
+    path: '/finance/learner/$studentId',
+    queryParameters: <String, String>{
+      if (name != null && name.isNotEmpty) 'name': name,
+    },
+  ).toString();
+
+  /// A receipt. Mirrors the web `/finance/receipts/[receiptNo]`.
+  static String receiptPath(String ref) =>
+      '/finance/receipts/${Uri.encodeComponent(ref)}';
+
   /// The in-app inbox. Mirrors the web `/notifications`.
   static const String notifications = '/notifications';
 

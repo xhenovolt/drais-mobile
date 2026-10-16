@@ -40,7 +40,9 @@ Direct mode is the primary path ([M0006](adr/M0006-direct-mode-ports-longterm.md
 | Students (remaining) | Photos (blocked: Cloudinary needs a signing secret, which must not ship in an APK), ID cards, Excel imports. Permanent delete stays desk-only. Fingerprint and face enrolment need a device and stay desktop-side. |
 | Attendance (writes) | Deferred: every write needs the attendance engine (`evaluateDay`, about 2,500 lines with dependencies, changed upstream 2026-09-29). Port it as one deliberate project, or leave writes to the web. |
 | **Notifications (inbox)** | **Done 2026-10-15.** All/Unread/Archived, unread badge on Home, mark read, mark all read, archive, deep links to learners and attendance. Push is still to come (needs a platform device-token endpoint). |
-| Then, in order | Finance (read-first), Timetable, Discipline and Work Plans, Messaging |
+| **Finance (read)** | **Done 2026-10-15.** Learner fees with school totals and status filters, one learner's ledger and payments, payments list, receipts. See PARITY §4.5. |
+| Finance (writes) | Blocked on idempotency keys: recording a payment twice over a bad link would charge twice. |
+| Then, in order | Timetable, Discipline and Work Plans, Messaging |
 
 API mode still throws `UnimplementedError` for attendance, students, setup and time health. It needs `server/` routes or hosted endpoints before it can serve these modules.
 
@@ -76,7 +78,7 @@ Term alerts, deadlines, attendance events. Pairs naturally with push, which is t
 
 Fee balances, receipts, payment history.
 
-**Watch for:** finance has its **own permission layer** on top of RBAC. Start read-only. Recording a payment on a phone needs an idempotency story the internal API does not have — the retry interceptor deliberately never retries writes, and this is the module that explains why.
+**Watch for:** despite `src/lib/finance-permissions.ts`, finance has **no separate permission layer** — that file is imported by nothing; access is ordinary RBAC codes plus the `finance` module switch (PARITY §4.5). Start read-only. Recording a payment on a phone needs an idempotency story the internal API does not have — the retry interceptor deliberately never retries writes, and this is the module that explains why.
 
 ### 5. Timetable — mostly read, mostly cacheable
 

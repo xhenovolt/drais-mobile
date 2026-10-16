@@ -440,20 +440,22 @@ abstract final class DraisModules {
       icon: Icons.payments_outlined,
       items: <ModuleItem>[
         ModuleItem(
-          label: 'Overview',
-          icon: Icons.account_balance_wallet_outlined,
-          availability: ModuleAvailability.planned,
-          phase: 3,
-        ),
-        ModuleItem(
           label: 'Learner Fees',
           icon: Icons.receipt_outlined,
-          availability: ModuleAvailability.planned,
-          phase: 3,
+          route: AppRoutes.fees,
+          availability: ModuleAvailability.live,
+          permission: 'finance.view',
         ),
         ModuleItem(
-          label: 'Payments',
+          label: 'Payments (view)',
           icon: Icons.point_of_sale_outlined,
+          route: AppRoutes.payments,
+          availability: ModuleAvailability.live,
+          permission: 'finance.view',
+        ),
+        ModuleItem(
+          label: 'Record Payment',
+          icon: Icons.add_card_outlined,
           availability: ModuleAvailability.planned,
           phase: 4,
           note: 'Needs server-side idempotency before it can be written to.',

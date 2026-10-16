@@ -97,6 +97,19 @@ class StudentDetailPage extends ConsumerWidget {
                   ),
                 ],
               ),
+              if (ref.watch(canProvider('finance.view'))) ...<Widget>[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Fees & payments'),
+                  onPressed: () => context.push(
+                    AppRoutes.learnerFinancePath(
+                      p.row.id,
+                      name: p.row.displayName,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               _Section(
                 title: 'Family',

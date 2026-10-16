@@ -19,6 +19,7 @@ import 'package:drais/features/attendance/presentation/pages/attendance_log_page
 import 'package:drais/features/attendance/presentation/pages/attendance_trends_page.dart';
 import 'package:drais/features/attendance/presentation/pages/person_attendance_page.dart';
 import 'package:drais/features/attendance/presentation/pages/unmatched_punches_page.dart';
+import 'package:drais/features/finance/presentation/finance_pages.dart';
 import 'package:drais/features/home/presentation/pages/home_page.dart';
 import 'package:drais/features/notifications/presentation/notifications_page.dart';
 import 'package:drais/features/profile/presentation/pages/profile_page.dart';
@@ -328,6 +329,31 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
         name: AppRoutes.profileName,
         builder: (BuildContext context, GoRouterState state) =>
             const ProfilePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.fees,
+        builder: (BuildContext context, GoRouterState state) => const FeesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.payments,
+        builder: (BuildContext context, GoRouterState state) =>
+            const PaymentsListPage(),
+      ),
+      GoRoute(
+        path: '/finance/learner/:studentId',
+        builder: (BuildContext context, GoRouterState state) {
+          final int? id = int.tryParse(state.pathParameters['studentId'] ?? '');
+          if (id == null) return const FeesPage();
+          return LearnerFinancePage(
+            studentId: id,
+            name: state.uri.queryParameters['name'],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/finance/receipts/:ref',
+        builder: (BuildContext context, GoRouterState state) =>
+            ReceiptPage(reference: state.pathParameters['ref'] ?? ''),
       ),
       GoRoute(
         path: AppRoutes.notifications,
