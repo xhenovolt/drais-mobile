@@ -398,8 +398,8 @@ abstract final class DraisModules {
         ModuleItem(
           label: 'Timetable',
           icon: Icons.calendar_view_week_outlined,
-          availability: ModuleAvailability.planned,
-          phase: 2,
+          route: AppRoutes.timetable,
+          availability: ModuleAvailability.live,
         ),
         ModuleItem(
           label: 'Academic Years',

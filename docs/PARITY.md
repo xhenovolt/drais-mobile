@@ -294,6 +294,19 @@ Permission checks (`requirePermission`) run in direct mode against the session's
 
 **Mechanical difference (same results):** `learners-fees` fetches every learner and every fee-item row (16,000+ at a large school) and sums them in memory. The port takes the same sums in SQL and returns one row per learner. The class-structure fallback joins null-safe (`<=>`) to reproduce the route's grouping of class-less learners with class-less structures. SQL sums `DECIMAL` exactly where JavaScript adds floats; for whole-shilling amounts the results are identical.
 
+### 4.6 Timetable (read-only, cached)
+
+| Mobile (`TimetableDirectRepository`) | LongTerm source |
+|---|---|
+| `load` | `GET /api/timetable-metadata` (classes, streams, periods) + `GET /api/timetable-entries` (`academics` module gate) |
+| `myStaffId` | the session's staff link, as `server/lib/auth/session.dart` and `src/lib/auth.ts` derive it |
+| `timetableDays` | `DAYS` in `src/components/timetable/TimetableGrid.tsx` (1–5, Monday–Friday) |
+
+- **Offline:** the first module on `OFFLINE_STRATEGY.md` step 1. Each successful load stores the rows it read in `CacheStore` (keyed by school and selection, 7-day TTL). When the database can't be reached, the last copy is shown under an "Offline — last updated" banner. The cache is cleared on every sign-in and sign-out.
+- **Presentation difference:** the web shows a five-day grid; the phone shows one day at a time, opening on today. It also offers "My timetable" via the entries route's existing `teacher_id` filter.
+- **Not ported:** editing entries, conflict checks and auto-generation (`timetable-generate`). That is desk work.
+- **Not fetched:** the metadata route's subjects and teachers lists, which only the web's edit form uses.
+
 ### 4.3 Shared direct-mode infrastructure
 
 - **`DraisDatabase.transaction`** exists because `mysql_client` 0.0.27's `pool.transactional()` never releases its connection when the transaction throws: `withConnection` has no `try/finally`. With a two-connection pool, two failed writes would lock the app out of the database. Never call `pool.transactional` directly.

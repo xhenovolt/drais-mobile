@@ -228,6 +228,9 @@ abstract final class AppRoutes {
   static String receiptPath(String ref) =>
       '/finance/receipts/${Uri.encodeComponent(ref)}';
 
+  /// The timetable. Mirrors the web `/academics/timetable`.
+  static const String timetable = '/academics/timetable';
+
   /// The in-app inbox. Mirrors the web `/notifications`.
   static const String notifications = '/notifications';
 

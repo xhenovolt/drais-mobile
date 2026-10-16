@@ -21,6 +21,7 @@ import 'package:drais/features/attendance/presentation/pages/person_attendance_p
 import 'package:drais/features/attendance/presentation/pages/unmatched_punches_page.dart';
 import 'package:drais/features/finance/presentation/finance_pages.dart';
 import 'package:drais/features/home/presentation/pages/home_page.dart';
+import 'package:drais/features/timetable/presentation/timetable_page.dart';
 import 'package:drais/features/notifications/presentation/notifications_page.dart';
 import 'package:drais/features/profile/presentation/pages/profile_page.dart';
 import 'package:drais/features/students/application/students_providers.dart';
@@ -354,6 +355,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
         path: '/finance/receipts/:ref',
         builder: (BuildContext context, GoRouterState state) =>
             ReceiptPage(reference: state.pathParameters['ref'] ?? ''),
+      ),
+      GoRoute(
+        path: AppRoutes.timetable,
+        builder: (BuildContext context, GoRouterState state) =>
+            const TimetablePage(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

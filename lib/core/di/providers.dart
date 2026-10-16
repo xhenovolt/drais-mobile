@@ -35,6 +35,8 @@ import 'package:drais/features/setup/data/setup_direct_repository.dart';
 import 'package:drais/features/finance/data/finance_direct_repository.dart';
 import 'package:drais/features/finance/domain/finance.dart';
 import 'package:drais/features/notifications/data/notifications_direct_repository.dart';
+import 'package:drais/features/timetable/data/timetable_direct_repository.dart';
+import 'package:drais/features/timetable/domain/timetable.dart';
 import 'package:drais/features/notifications/domain/notifications.dart';
 import 'package:drais/features/students/data/student_admin_direct_repository.dart';
 import 'package:drais/features/students/data/students_direct_repository.dart';
@@ -514,6 +516,27 @@ final Provider<FinanceRepository> financeRepositoryProvider =
         database: database,
         schoolId: user!.schoolId!,
         can: user.can,
+      );
+    });
+
+/// The school timetable, read-only and cached. Direct mode only.
+final Provider<TimetableRepository> timetableRepositoryProvider =
+    Provider<TimetableRepository>((Ref ref) {
+      final DraisDatabase? database = ref.watch(draisDatabaseProvider);
+      final AuthUser? user = ref.watch(currentUserProvider);
+      if (database == null) {
+        throw UnimplementedError(
+          'Timetable over the API is not implemented yet — run in direct mode.',
+        );
+      }
+      if (user?.schoolId == null) {
+        throw StateError('Requires a signed-in user with a school.');
+      }
+      return TimetableDirectRepository(
+        database: database,
+        schoolId: user!.schoolId!,
+        userId: user.id,
+        cache: ref.watch(cacheStoreProvider),
       );
     });
 
