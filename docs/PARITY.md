@@ -307,6 +307,22 @@ Permission checks (`requirePermission`) run in direct mode against the session's
 - **Not ported:** editing entries, conflict checks and auto-generation (`timetable-generate`). That is desk work.
 - **Not fetched:** the metadata route's subjects and teachers lists, which only the web's edit form uses.
 
+### 4.7 Work Plans (and Discipline)
+
+| Mobile (`WorkPlansDirectRepository`) | LongTerm source |
+|---|---|
+| `list` | `GET /api/work-plans` (`work_plans` module; status/priority filters; search client-side, as the web page) |
+| `create` | `POST /api/work-plans`, with the web form's fields |
+| `update` | `PATCH /api/work-plans`, **school-scoped and module-gated here** |
+
+- **Which path is current:** `/api/work-plans`. The web nav links `/work-plans`, which calls it. `/api/workplans` serves an older `WorkplansManager` component on `/workplans` and is not ported.
+- **Security bug, deliberately not reproduced:** the route's `PATCH` and `DELETE` check **no session and no school**. Anyone who can reach the server can edit or delete any school's work plan by id. The mobile update runs as the signed-in school with `AND school_id = ?`. Delete isn't ported (the web page offers none). Both route handlers need `getSessionSchoolId` plus a `school_id` condition.
+- **Likely bug:** the web create form sends neither `owner_id` nor `assigned_to`, and the route binds them as `undefined`, which `mysql2` normally rejects. Web creation probably fails; confirm against production. The port writes `NULL`.
+- **Mobile addition:** updating status and progress uses the route's own `PATCH`, which the web page never calls. Like the route, it writes every field, so the phone sends the stored values back for the fields it doesn't edit.
+- **Datetimes** are stored as the wall-clock time typed into the web's `datetime-local`, with no zone, and are shown as stored.
+
+**Discipline does not exist in LongTerm.** There's no `/api/discipline` route and no conduct, behaviour or incident module. Nothing was ported, and none should be invented here (M0004); ROADMAP's mention of it was aspirational.
+
 ### 4.3 Shared direct-mode infrastructure
 
 - **`DraisDatabase.transaction`** exists because `mysql_client` 0.0.27's `pool.transactional()` never releases its connection when the transaction throws: `withConnection` has no `try/finally`. With a two-connection pool, two failed writes would lock the app out of the database. Never call `pool.transactional` directly.

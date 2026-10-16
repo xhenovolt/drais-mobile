@@ -43,7 +43,9 @@ Direct mode is the primary path ([M0006](adr/M0006-direct-mode-ports-longterm.md
 | **Finance (read)** | **Done 2026-10-15.** Learner fees with school totals and status filters, one learner's ledger and payments, payments list, receipts. See PARITY §4.5. |
 | Finance (writes) | Blocked on idempotency keys: recording a payment twice over a bad link would charge twice. |
 | **Timetable (read)** | **Done 2026-10-16.** Day view, "My timetable" for teachers, class/stream view, offline cache with "last updated". See PARITY §4.6. |
-| Then, in order | Discipline and Work Plans, Messaging |
+| **Work Plans** | **Done 2026-10-16.** List, filters, search, create, status/progress update (school-scoped). See PARITY §4.7. |
+| Discipline | **Not applicable**: LongTerm has no discipline module to port. |
+| Then | Messaging |
 
 API mode still throws `UnimplementedError` for attendance, students, setup and time health. It needs `server/` routes or hosted endpoints before it can serve these modules.
 

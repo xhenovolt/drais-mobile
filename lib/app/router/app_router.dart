@@ -22,6 +22,7 @@ import 'package:drais/features/attendance/presentation/pages/unmatched_punches_p
 import 'package:drais/features/finance/presentation/finance_pages.dart';
 import 'package:drais/features/home/presentation/pages/home_page.dart';
 import 'package:drais/features/timetable/presentation/timetable_page.dart';
+import 'package:drais/features/workplans/presentation/workplans_page.dart';
 import 'package:drais/features/notifications/presentation/notifications_page.dart';
 import 'package:drais/features/profile/presentation/pages/profile_page.dart';
 import 'package:drais/features/students/application/students_providers.dart';
@@ -360,6 +361,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoutes.timetable,
         builder: (BuildContext context, GoRouterState state) =>
             const TimetablePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.workPlans,
+        builder: (BuildContext context, GoRouterState state) =>
+            const WorkPlansPage(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

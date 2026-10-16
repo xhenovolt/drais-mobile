@@ -231,6 +231,9 @@ abstract final class AppRoutes {
   /// The timetable. Mirrors the web `/academics/timetable`.
   static const String timetable = '/academics/timetable';
 
+  /// Work plans. Mirrors the web `/work-plans`.
+  static const String workPlans = '/work-plans';
+
   /// The in-app inbox. Mirrors the web `/notifications`.
   static const String notifications = '/notifications';
 

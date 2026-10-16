@@ -545,6 +545,20 @@ abstract final class DraisModules {
       ],
     ),
 
+    // ── Work Plans ────────────────────────────────────────────────────────
+    ModuleSection(
+      label: 'Work Plans',
+      icon: Icons.assignment_outlined,
+      items: <ModuleItem>[
+        ModuleItem(
+          label: 'Workplans',
+          icon: Icons.assignment_outlined,
+          route: AppRoutes.workPlans,
+          availability: ModuleAvailability.live,
+        ),
+      ],
+    ),
+
     // ── Notifications ─────────────────────────────────────────────────────
     ModuleSection(
       label: 'Notifications',
